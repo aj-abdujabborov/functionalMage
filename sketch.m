@@ -9,6 +9,15 @@
 % Put a lot of basic methods into the parent functionalMage class, so that
 % the derived MVPA and Univarite options are simpler to program.
 
+%% 
+delete(fm); clear fm;
+fm = functionalMage();
+
+T = fm.simulation.trialsTable;
+T = [T;...
+    {1, [1 2 3], ["A", "B"], [3 3 3], nan};...
+    {1, [4 5 6], ["C", "D"], [3 3 3], nan}];
+
 %%
 fm = functionalMage('MVPA');
 

@@ -8,7 +8,7 @@ classdef functionalMage < matlab.mixin.Copyable % inherits from handle
         hrfLibrary = 'SimTB';
 
         % analysis = fm_analysis();
-        % simulation = fm_simulation();
+        simulation = fm_simulation();
     end
     
     properties (GetAccess = public, SetAccess = private)
@@ -21,8 +21,7 @@ classdef functionalMage < matlab.mixin.Copyable % inherits from handle
     end
 
     methods
-        function obj = functionalMage(analysis)
-            obj.analysisType = analysis;
+        function obj = functionalMage()
         end
 
         function props = get.simulationProperties(obj)
