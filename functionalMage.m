@@ -7,7 +7,8 @@ classdef functionalMage < matlab.mixin.Copyable % inherits from handle
             'numRuns', 5);
         hrfLibrary = 'SimTB';
 
-        analysis = analysis();
+        % analysis = fm_analysis();
+        % simulation = fm_simulation();
     end
     
     properties (GetAccess = public, SetAccess = private)
