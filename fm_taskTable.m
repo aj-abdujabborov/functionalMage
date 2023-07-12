@@ -1,9 +1,11 @@
 
 classdef fm_taskTable < matlab.mixin.Copyable
-    properties
+    properties (Dependent)
         content;
-        contentNumerical;
+    end
 
+    properties
+        contentNumerical;
         NeuralActivity;
         NeuralPatternIDs;
         RegressionIDs;
@@ -13,6 +15,9 @@ classdef fm_taskTable < matlab.mixin.Copyable
         numNeuralPatterns;
     end
 
+    properties (Access = private)
+        privateContent;
+    end
 
     properties (Access = private, Constant = true)
         columnNamesTypes = [
@@ -28,7 +33,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
         letterColumn = 5;
     end
 
-    properties (Access = public, Constant = true)
+    properties (Access = public, Constant = true, Hidden = true)
         NON_CLASSIFIED_EVENT = 0; % 0 in ClassificationGroups = do not classify
     end
 
@@ -37,10 +42,12 @@ classdef fm_taskTable < matlab.mixin.Copyable
         function obj = fm_taskTable()
             obj.content = obj.getEmptyTaskTable();
         end
+    end
 
-        function set.content(obj, newContent)
-            if isempty(newContent)
-                obj.content = newContent;
+    methods % Get and Set methods
+        function set.content(obj, content)
+            if isempty(content)
+                obj.privateContent = content;
                 return;
             end
 
@@ -65,6 +72,10 @@ classdef fm_taskTable < matlab.mixin.Copyable
             obj.setEventIDs();
             obj.setIDVectors();
             obj.setNumNeuralPatterns();
+        end
+
+        function content = get.content(obj)
+            content = obj.privateContent;
         end
     end
 
