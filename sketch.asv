@@ -9,12 +9,17 @@
 % Put a lot of basic methods into the parent functionalMage class, so that
 % the derived MVPA and Univarite options are simpler to program.
 
+addpath(pwd);
+addpath('helpers');
+addpath('cache');
+
 fm = functionalMage();
 fm.taskTable = [fm.taskTable;...
-    {3 "3 3 3" "0 6 9" "1 1 1", "A B B", "1 2 3" "1 2 3"};...
-    {1 "3" "0" "1" "A", "1" "1"};...
-    {1 "3 3" "0 3" "1 1", "A B", "1 2" "1 2"}
+    {3 "3 3 3" "0 6 9" "1 0.3 0.15", "A B C", "1 2 3" "0 1 3"};...
+    {1 "3" "0" "1" "A", "1" "0"};...
+    {1 "3 3" "0 3" "0.11 1", "A B", "1 2" "0 1"}
     ];
+fm.simProperties.numRuns = 2;
 fm.simulate();
 
 % 3	3 3 3	0 6 9	1 1 1	1 2 3	A B B	1 2 3

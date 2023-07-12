@@ -1,26 +1,35 @@
 
-classdef functionalMage < matlab.mixin.Copyable % inherits from handle
+classdef functionalMage < matlab.mixin.Copyable
     properties (Access = public, Dependent)
         taskTable;
     end
     
     properties (Access = public)
-        simProperties = fm_simulationProperties();
+        simProperties;
         fmriData;
 
-        nSubj = 10;
+        nSubj;
     end
 
     properties (Access = private)
-        taskTableReal = fm_taskTable();
+        taskTableReal;
+        simulation;
     end
     
     properties (GetAccess = public, SetAccess = private, NonCopyable)
     end
 
     methods
+        function obj = functionalMage()
+            obj.taskTableReal = fm_taskTable();
+            obj.simProperties = fm_simulationProperties();
+            obj.nSubj = 10;
+        end
+
         function simulate(obj)
-            
+            % Check that taskTable and simProperties are ready
+            obj.simulation = fm_simulation(obj.taskTableReal, obj.simProperties);
+            obj.simulation.generate();
         end
     end
 
@@ -41,8 +50,13 @@ classdef functionalMage < matlab.mixin.Copyable % inherits from handle
     end
 
     %%% Static methods
-    methods (Access = protected, Static = true)
-
+    methods (Static = true)
+        function output = getCacheDirectory()
+            output = fullfile(fileparts(which('functionalMage.m')), 'cache/');
+            if ~exist(output, 'dir')
+                mkdir(output);
+            end
+        end
     end
 
 

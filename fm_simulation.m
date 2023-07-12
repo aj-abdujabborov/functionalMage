@@ -1,37 +1,128 @@
 
 classdef fm_simulation < matlab.mixin.Copyable
     properties
-        trialsTable;
+        taskTable;
+        simProperties;
+
+        groundTruthPatterns;
+        groundTruthHRFs;
+        eventList;
+        trialSequence;
     end
  
     methods
-        function obj = fm_simulation()
-            obj.makeTrialsTable();
+        function obj = fm_simulation(taskTable, simulationProperties)
+            if (nargin > 0)
+                obj.taskTable = taskTable;
+                obj.simProperties = simulationProperties;
+            end
         end
 
-        function generate()
-            % produce ground-truth neural patterns
-            % make runOutlines
+        function generate(obj)
+            % TODO: verify taskTable and simProperties are set
+
+            obj.makeGroundTruthPatterns();
+            obj.makeEventList();
+            obj.scaleEventListByActivity();
+            obj.makeGroundTruthHRFs();
+            obj.makeNeuralTimeSeries();
+           
             % createNTS
             % convolve with HRF
             % add noise
+
+            
         end
 
-        function saveToNifti(sampleNii)
-            % take sample nifti and replace it with current data
-            % or you could try to generate new data from scratch.
+        function makeGroundTruthPatterns(obj)
+            obj.groundTruthPatterns = rand(obj.taskTable.numNeuralPatterns, obj.simProperties.numVoxels);
         end
 
-        function generateNoise()
-            fm_Noise(noiseParams, noiseData);
+        function makeEventList(obj)
+            taskTableContent = obj.taskTable.contentNumerical;
+            obj.eventList = cell(1, obj.simProperties.numRuns);
+            obj.trialSequence = cell(1, obj.simProperties.numRuns);
+            for i = 1:obj.simProperties.numRuns
+                [obj.eventList(i), obj.trialSequence(i)] = makefmriseq(...
+                    taskTableContent.Durations(:)',...
+                    taskTableContent.EventIDs(:)',...
+                    taskTableContent.Probability(:)',...
+                    obj.simProperties.runDuration,...
+                    1,...
+                    obj.simProperties.itiModel,...
+                    obj.simProperties.itiParams,...
+                    obj.simProperties.TR,...
+                    'addExtraTrials', 0);
+            end
         end
 
-        function saveToMat(sampleNii)
-
+        function scaleEventListByActivity(obj)
+            for i = 1:obj.simProperties.numRuns
+                obj.eventList{i}.Activity = obj.taskTable.NeuralActivity(obj.eventList{i}.ID)';
+            end
         end
 
+        function makeGroundTruthHRFs(obj)
+            cacheLocation = fullfile(functionalMage.getCacheDirectory(), 'hrfDatabase.mat');
+            hrfLen = 40;
+            obj.groundTruthHRFs = getHrfDb(...
+                obj.simProperties.hrfsCorrelationWithDoubleGammaCanonical,...
+                obj.simProperties.numVoxels,...
+                obj.simProperties.TR,...
+                obj.simProperties.hrfLibrary,...
+                cacheLocation, ...
+                hrfLen);
+        end
+
+        function makeNeuralTimeSeries(obj)
+            eventBasePattern = cell(1, obj.simProperties.numRuns);
+            eventNoisePattern = cell(1, obj.simProperties.numRuns);
+            eventGroundTruth = cell(1, obj.simProperties.numRuns);
+            neuralTimeSeries = cell(1, obj.simProperties.numRuns);
+
+            for i = 1:obj.simProperties.numRuns
+                eventBasePattern{i} = generateBasePattern(obj.eventList{i});
+                eventNoisePattern{i} = generateEventNoisePattern(obj.eventList{i});
+                eventGroundTruth{i} = eventBasePattern{i} + eventNoisePattern{i};
+                neuralTimeSeries{i} = computeGroundTruthTimeSeries(obj.eventList{i}, eventGroundTruth{i});
+            end
+
+            function eventBasePatternRun = generateBasePattern(eventListRun)
+                neuralPatternPerEvent = obj.taskTable.NeuralPatternIDs(eventListRun.ID);
+                eventBasePatternRun = obj.groundTruthPatterns(neuralPatternPerEvent, :);
+                eventBasePatternRun = eventBasePatternRun .* eventListRun.Activity;
+            end
+
+            function eventNoisePatternRun = generateEventNoisePattern(eventListRun)
+                eventNoisePatternRun = rand(height(eventListRun), obj.simProperties.numVoxels) - 0.5;
+                noiseScale = eventListRun.Activity * obj.simProperties.eventToEventNoiseAmount;
+                eventsToCorrelate = ones(size(noiseScale));
+                if obj.simProperties.eventToEventNoiseInOnlyClassifiedEvents
+                    isClassifyPerEvent = obj.taskTable.ClassificationGroups((eventListRun.ID)) ~= 0;
+                    noiseScale = noiseScale .* isClassifyPerEvent(:);
+                    eventsToCorrelate = isClassifyPerEvent(:);
+                end
+                eventNoisePatternRun = eventNoisePatternRun .* noiseScale;
+                eventNoisePatternRun(eventsToCorrelate, :) = makecorrelated(...
+                    eventNoisePatternRun(eventsToCorrelate, :),...
+                    obj.simProperties.eventToEventNoiseCoherence);
+            end
+
+            function neuralTimeSeriesRun = computeGroundTruthTimeSeries(eventListRun, eventPatterns)
+                eventListRun.ID = (1:height(eventListRun))';
+                timePointsOfEachEvent = computeDesignMatrix(...
+                    eventListRun,...
+                    obj.simProperties.runDuration,...
+                    obj.simProperties.TR);
+                keyboard;
+
+                neuralTimeSeriesRun = 1;
+
+                % for ev = 1:nEvsPRun(i)
+                %     trPts = logical(timePointsOfEachEvent(:,ev));
+                %     amNts(trPts, :, i) = repmat(gtData{i}(ev,:), sum(trPts), 1);
+                % end
+            end
+        end
     end
-
-    
-    
 end
