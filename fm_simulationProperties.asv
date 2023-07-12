@@ -19,6 +19,10 @@ classdef fm_simulationProperties < matlab.mixin.Copyable
         eventToEventNoiseCoherence = 0.5;
         eventToEventNoiseInOnlyClassifiedEvents = false;
     end
+
+    properties (GetAccess = public, SetAccess = private, Dependent)
+        numTRs;
+    end
  
     methods % Set methods
         function set.TR(obj, TR)
@@ -28,6 +32,12 @@ classdef fm_simulationProperties < matlab.mixin.Copyable
         function set.numRuns(obj, nRuns)
             assert(nRuns > 0, "Number of runs should be more than 0.");
             obj.numRuns = nRuns;
+        end
+    end
+
+    methods % Get methods
+        function numTRs = get.numTRs(obj)
+            numTRs = obj.runDuration ./ obj.TR;
         end
     end
 end

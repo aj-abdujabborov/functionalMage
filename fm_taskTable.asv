@@ -28,6 +28,10 @@ classdef fm_taskTable < matlab.mixin.Copyable
         letterColumn = 5;
     end
 
+    properties (Access = public, Constant = true)
+        NON_CLASSIFIED_EVENT = 0; % 0 in ClassificationGroups = do not classify
+    end
+
 
     methods
         function obj = fm_taskTable()
