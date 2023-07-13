@@ -40,18 +40,31 @@ classdef fm_taskTable < matlab.mixin.Copyable
 
     methods
         function obj = fm_taskTable()
-            obj.content = obj.getEmptyTaskTable();
+            obj.content = [];
         end
     end
 
     methods % Get and Set methods
         function set.content(obj, content)
             if isempty(content)
-                obj.privateContent = content;
+                obj.privateContent = obj.getEmptyTaskTable();
                 return;
+                % PROBLEM: what happens if content is empty but other
+                % fields are already set? they have to be cleared too.
             end
 
-            for i = 1:size(newContent, 1)
+            %{
+            assert(all(content.Probability > 0), "Probabilities must be larger than 0.");
+            content.Durations
+
+            for i = 1:size(content, 1)
+                keyboard;
+                tokens = split(strrep(content.Durations(i), ",", " "));
+                    % do this and save it back into content.
+                x = regexp(tokens, "^(\d+|\d+\.\d+|\.\d+)$")
+                if all(struct2array(x)==1), inputs are correct; end
+                        % checks that the number is either xxx, xxx.xxx or .xxx
+
                 % TODO:
                 % * Certain entries must be non-empty
                 % * Number of elements in all entries of the same row (except
@@ -66,8 +79,9 @@ classdef fm_taskTable < matlab.mixin.Copyable
                 % NeuralPatternIDs, which should allow letters (can't have
                 % multiple letters in sequence without a break).
             end
+            %}
 
-            obj.content = newContent;
+            obj.privateContent = content;
             obj.setContentNumerical();
             obj.setEventIDs();
             obj.setIDVectors();
@@ -134,6 +148,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
 
         function output = convertToNumericalTable(content)
             output = table2cell(content);
+            output = cellfun(@(x) strrep(x, ",", " "), output, 'UniformOutput', 0);
             output(:,fm_taskTable.stringColumns) = cellfun(@(x) str2double(split(x))', output(:,fm_taskTable.stringColumns), 'UniformOutput', 0);
             output(:,fm_taskTable.letterColumn) = cellfun(@(x) split(x)', output(:,fm_taskTable.letterColumn), 'UniformOutput', 0);
             output = cell2table(output, 'VariableNames', fm_taskTable.columnNamesTypes(:,1));
