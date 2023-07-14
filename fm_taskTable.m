@@ -6,7 +6,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
 
     properties
         contentNumerical;
-        NeuralActivity;
+        NeuralIntensity;
         NeuralPatternIDs;
         RegressionIDs;
         ClassificationGroups;
@@ -24,7 +24,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
                         ["Probability", "double"]; ...
 			            ["Durations", "string"]; ...
 			            ["Onsets", "string"];
-                        ["NeuralActivity", "string"]; ...
+                        ["NeuralIntensity", "string"]; ...
                         ["NeuralPatternIDs", "string"]; ...
 			            ["RegressionIDs", "string"]; ...
                         ["ClassificationGroups", "string"]; ...
@@ -70,7 +70,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
                 % * Number of elements in all entries of the same row (except
                 % Probability) must match, except for empty fields that are
                 % allowed to be empty.
-                % * Onsets and NeuralActivity may be empty, in which case the
+                % * Onsets and NeuralIntensity may be empty, in which case the
                 % numbers must be filled in.
                 % * Trailing spaces must be removed. Trailing commas should
                 % throw an error.
@@ -122,7 +122,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
         end
 
         function setIDVectors(obj)
-            obj.NeuralActivity = collapse(obj.contentNumerical.NeuralActivity);
+            obj.NeuralIntensity = collapse(obj.contentNumerical.NeuralIntensity);
             obj.NeuralPatternIDs = collapse(obj.contentNumerical.NeuralPatternIDs);
             obj.RegressionIDs = collapse(obj.contentNumerical.RegressionIDs);
             obj.ClassificationGroups = collapse(obj.contentNumerical.ClassificationGroups);

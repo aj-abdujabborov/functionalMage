@@ -13,12 +13,12 @@ classdef fm_simulationProperties < matlab.mixin.Copyable
         itiModel = 'fixed';
         itiParams = 5;
 
-        noiseSd = 2;
-        noiseSources = {'tempcorr'};
+        noiseSD = 2;
+        noiseSources = {'AR1', 1};
 
-        eventToEventNoiseAmount = 2; % rename eventToEventNoise to eventNoise EVERYWHERE
-        eventToEventNoiseCoherence = 0.5;
-        eventToEventNoiseInOnlyClassifiedEvents = false;
+        neuralFluctuationAmount = 2; % rename eventToEventNoise to eventNoise EVERYWHERE
+        neuralFluctuationCoherence = 0.5;
+        neuralFluctuationInOnlyClassifiedEvents = false;
     end
 
     properties (GetAccess = public, SetAccess = private, Dependent)
