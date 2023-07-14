@@ -29,8 +29,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
 			            ["RegressionIDs", "string"]; ...
                         ["ClassificationGroups", "string"]; ...
                         ];
-        stringColumns = [2:4, 6:7];
-        letterColumn = 5;
+        stringColumns = [2:7];
     end
 
     properties (Access = public, Constant = true, Hidden = true)
@@ -39,12 +38,14 @@ classdef fm_taskTable < matlab.mixin.Copyable
 
 
     methods
+        %%%
         function obj = fm_taskTable()
             obj.content = [];
         end
     end
 
     methods % Get and Set methods
+        %%%
         function set.content(obj, content)
             if isempty(content)
                 obj.privateContent = obj.getEmptyTaskTable();
@@ -82,76 +83,65 @@ classdef fm_taskTable < matlab.mixin.Copyable
             %}
 
             obj.privateContent = content;
-            obj.setContentNumerical();
-            obj.setEventIDs();
-            obj.setIDVectors();
-            obj.setNumNeuralPatterns();
+            obj.contentNumerical = obj.convertContentToNumerical(obj.privateContent);
+            obj.contentNumerical = [obj.contentNumerical, obj.calculateEventIDs(obj.contentNumerical)];
+
+            obj.NeuralIntensity = obj.collapseCellArray(obj.contentNumerical.NeuralIntensity);
+            obj.NeuralPatternIDs = obj.collapseCellArray(obj.contentNumerical.NeuralPatternIDs);
+            obj.RegressionIDs = obj.collapseCellArray(obj.contentNumerical.RegressionIDs);
+            obj.ClassificationGroups = obj.collapseCellArray(obj.contentNumerical.ClassificationGroups);
+            obj.EventIDs = obj.collapseCellArray(obj.contentNumerical.EventIDs);
+
+            obj.numNeuralPatterns = obj.numUniqueElements(obj.NeuralPatternIDs);
         end
 
+        %%%
         function content = get.content(obj)
             content = obj.privateContent;
         end
     end
 
-
-    methods (Access = private)
-        function setContentNumerical(obj)
-            obj.contentNumerical = obj.convertToNumericalTable(obj.content);
-            obj.contentNumerical.NeuralPatternIDs = transformLettersToNumbers(obj.contentNumerical.NeuralPatternIDs);
-
-            function cellArrayNumbers = transformLettersToNumbers(cellArrayLetters)
-                letters = unique([cellArrayLetters{:}]);
-                numbers = 1:length(letters);
-                for i = length(cellArrayLetters):-1:1
-                    [~, idx] = ismember(cellArrayLetters{i}, letters);
-                    cellArrayNumbers{i} = numbers(idx);
-                end
-                cellArrayNumbers = cellArrayNumbers';
-            end
-        end
-
-        function setEventIDs(obj)
-            numEventsPerTask = cellfun(@length, obj.contentNumerical.RegressionIDs);
-            idRangesPerTask = [0 cumsum(numEventsPerTask(:)')];
-            eventIDs = cell(length(numEventsPerTask), 1);
-            for i = 1:length(numEventsPerTask)
-                eventIDs{i} = idRangesPerTask(i)+1 : idRangesPerTask(i+1);
-            end
-            obj.contentNumerical = [obj.contentNumerical...
-                                    table(eventIDs, 'VariableNames', {'EventIDs'})];
-        end
-
-        function setIDVectors(obj)
-            obj.NeuralIntensity = collapse(obj.contentNumerical.NeuralIntensity);
-            obj.NeuralPatternIDs = collapse(obj.contentNumerical.NeuralPatternIDs);
-            obj.RegressionIDs = collapse(obj.contentNumerical.RegressionIDs);
-            obj.ClassificationGroups = collapse(obj.contentNumerical.ClassificationGroups);
-            obj.EventIDs = collapse(obj.contentNumerical.EventIDs);
-
-            function output = collapse(cellArray)
-                output = [cellArray{:}];
-            end
-        end
-
-        function setNumNeuralPatterns(obj)
-            obj.numNeuralPatterns = length(unique(obj.NeuralPatternIDs));
-        end
-    end
-
-
-    methods (Access = protected, Static = true)
+    methods (Access = private, Static = true)
+        %%%
         function content = getEmptyTaskTable()
             content = table('Size', [0, size(fm_taskTable.columnNamesTypes,1)],... 
 	            'VariableNames', fm_taskTable.columnNamesTypes(:,1),...
 	            'VariableTypes', fm_taskTable.columnNamesTypes(:,2));
         end
 
-        function output = convertToNumericalTable(content)
-            output = table2cell(content);
-            output = cellfun(@(x) strrep(x, ",", " "), output, 'UniformOutput', 0);
-            output(:,fm_taskTable.stringColumns) = cellfun(@(x) str2double(split(x))', output(:,fm_taskTable.stringColumns), 'UniformOutput', 0);
-            output(:,fm_taskTable.letterColumn) = cellfun(@(x) split(x)', output(:,fm_taskTable.letterColumn), 'UniformOutput', 0);
-            output = cell2table(output, 'VariableNames', fm_taskTable.columnNamesTypes(:,1));
+        %%%
+        function contentNumerical = convertContentToNumerical(content)
+            contentNumerical = table2cell(content);
+
+            contentNumerical(:,fm_taskTable.stringColumns) = cellfun(...
+                @(x) str2double(split(strrep(x, ",", " "))'), ...
+                contentNumerical(:,fm_taskTable.stringColumns),...
+                'UniformOutput', 0);
+
+            contentNumerical = cell2table(...
+                contentNumerical,...
+                'VariableNames', fm_taskTable.columnNamesTypes(:,1));
+        end
+
+        %%%
+        function EventIDs = calculateEventIDs(contentNumerical)
+            numEventsPerTask = cellfun(@length, contentNumerical.RegressionIDs);
+            idRangesPerTask = [0 cumsum(numEventsPerTask(:)')];
+            eventIDs = cell(length(numEventsPerTask), 1);
+            for i = 1:length(numEventsPerTask)
+                eventIDs{i} = idRangesPerTask(i)+1 : idRangesPerTask(i+1);
+            end
+            EventIDs = table(eventIDs, 'VariableNames', {'EventIDs'});
+        end
+
+        %%%
+        function numElements = numUniqueElements(vector)
+            numElements = length(unique(vector));
+        end
+
+        %%%
+        function collapsed = collapseCellArray(cellArray)
+            collapsed = [cellArray{:}];
         end
     end
 end
