@@ -6,29 +6,25 @@ classdef functionalMage < matlab.mixin.Copyable
     
     properties (Access = public)
         simProperties;
-        fmriData;
+        simulation;
 
         nSubj;
     end
 
     properties (Access = private)
-        taskTableReal;
-        simulation;
-    end
-    
-    properties (GetAccess = public, SetAccess = private, NonCopyable)
+        privateTaskTable;
     end
 
     methods
         function obj = functionalMage()
-            obj.taskTableReal = fm_taskTable();
+            obj.privateTaskTable = fm_taskTable();
             obj.simProperties = fm_simulationProperties();
             obj.nSubj = 10;
         end
 
         function simulate(obj)
             % Check that taskTable and simProperties are ready
-            obj.simulation = fm_simulation(obj.taskTableReal, obj.simProperties);
+            obj.simulation = fm_simulation(obj.privateTaskTable, obj.simProperties);
             obj.simulation.generate();
         end
     end
@@ -36,11 +32,11 @@ classdef functionalMage < matlab.mixin.Copyable
     %%% Get and Set Methods
     methods
         function output = get.taskTable(obj)
-            output = obj.taskTableReal.content;
+            output = obj.privateTaskTable.content;
         end
 
         function set.taskTable(obj, newTaskTable)
-            obj.taskTableReal.content = newTaskTable;
+            obj.privateTaskTable.content = newTaskTable;
         end
     end
 
