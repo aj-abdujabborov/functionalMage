@@ -8,7 +8,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
         contentNumerical;
         NeuralIntensity;
         NeuralPatternIDs;
-        RegressionIDs;
+        AnalysisIDs;
         ClassificationGroups;
         EventIDs;
 
@@ -26,7 +26,7 @@ classdef fm_taskTable < matlab.mixin.Copyable
 			            ["Onsets", "string"];
                         ["NeuralIntensity", "string"]; ...
                         ["NeuralPatternIDs", "string"]; ...
-			            ["RegressionIDs", "string"]; ...
+			            ["AnalysisIDs", "string"]; ...
                         ["ClassificationGroups", "string"]; ...
                         ];
         stringColumns = [2:7];
@@ -79,21 +79,19 @@ classdef fm_taskTable < matlab.mixin.Copyable
                 % characters must throw an error (except for
                 % NeuralPatternIDs, which should allow letters (can't have
                 % multiple letters in sequence without a break).
+                % * Check that for each column, there are no missing values
+                % e.g,. neuralPatternIDs's unique elements cannot be 1, 2,
+                % and 4
+                % * check mapability from one vector to another e.g., the
+                % same RegressionID (now AnalysisID) values cannot map to
+                % different NeuralPatternIDs (unless they are chosen to not
+                % be classified). same from AnalysisID to ClassificationGroups
             end
             %}
 
             obj.privateContent = content;
             obj.contentNumerical = obj.convertContentToNumerical(obj.privateContent);
             obj.contentNumerical = [obj.contentNumerical, obj.calculateEventIDs(obj.contentNumerical)];
-            
-
-            obj.NeuralIntensity = obj.collapseCellArray(obj.contentNumerical.NeuralIntensity);
-            obj.NeuralPatternIDs = obj.collapseCellArray(obj.contentNumerical.NeuralPatternIDs);
-            obj.RegressionIDs = obj.collapseCellArray(obj.contentNumerical.RegressionIDs);
-            obj.ClassificationGroups = obj.collapseCellArray(obj.contentNumerical.ClassificationGroups);
-            obj.EventIDs = obj.collapseCellArray(obj.contentNumerical.EventIDs);
-
-            obj.numNeuralPatterns = obj.numUniqueElements(obj.NeuralPatternIDs);
         end
 
         %%%
@@ -134,23 +132,13 @@ classdef fm_taskTable < matlab.mixin.Copyable
 
         %%%
         function EventIDs = calculateEventIDs(contentNumerical)
-            numEventsPerTask = cellfun(@length, contentNumerical.RegressionIDs);
+            numEventsPerTask = cellfun(@length, contentNumerical.AnalysisIDs);
             idRangesPerTask = [0 cumsum(numEventsPerTask(:)')];
             eventIDs = cell(length(numEventsPerTask), 1);
             for i = 1:length(numEventsPerTask)
                 eventIDs{i} = idRangesPerTask(i)+1 : idRangesPerTask(i+1);
             end
             EventIDs = table(eventIDs, 'VariableNames', {'EventIDs'});
-        end
-
-        %%%
-        function numElements = numUniqueElements(vector)
-            numElements = length(unique(vector));
-        end
-
-        %%%
-        function collapsed = collapseCellArray(cellArray)
-            collapsed = [cellArray{:}];
         end
     end
 end

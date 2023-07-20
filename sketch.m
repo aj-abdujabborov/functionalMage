@@ -1,17 +1,13 @@
-% IDEAS
+%% ideas
 % --> Every fM object can have only one design indicated (if you want to
 % compare fixed design with partial design, you need to make two objects).
 % --> Inherit "MVPA" and "Univariate" from a functionalMage class.
+% --> functionalMage() should be an optinal class. it should not be
+% necessary to use it.
 
-% functionalMage needs to be split into modules, so that it's easier to
-% maintain. If everything is thrown into one muddhole class, things could
-% get very messy. Split into "simulate" and "analyze" sections.
-% Put a lot of basic methods into the parent functionalMage class, so that
-% the derived MVPA and Univarite options are simpler to program.
-
-addpath(pwd);
-addpath('helpers');
-addpath('cache');
+%% testing
+parentPath = fileparts(which("functionalMage.m"));
+addpath(genpath(parentPath));
 
 fm = functionalMage();
 fm.taskTable = [fm.taskTable;...
@@ -22,119 +18,78 @@ fm.taskTable = [fm.taskTable;...
 fm.simProperties.numRuns = 2;
 fm.simulate();
 
-% 3	3 3 3	0 6 9	1 1 1	1 2 3	A B B	1 2 3
-% 1	3	0	1 1 1	1	A	1
-% 1	3 3	0 6	1 1 1	1 2	 A B	1 2
-% 1	3 3	0 6	1 1 1	1 3	 1 B	1 3
-% 3	4 3 3	0 6 9	1 1 1	1 4 5	A B C	1 2 3
+aInfo = fm_analysisInfo(fm.taskTable, fm.simulation.eventList);
+% aInfo.taskTable = fm.simulation.taskTable; % functionalMage should do this automatically
+% aInfo.eventList = fm.simulation.eventList; % functionalMage should do this automatically
+aInfo.newDurationsAndOnsets = []; % something here
+aInfo.HRFs = 1; % convolution has no effect // also allow to set it [].
+aInfo.Name = "Call this something you understand";
+fm.analysisList.add(aInfo);
 
+fm.analyze(); % does both GLM and the MVPA afterwards
+fm.results; % results maybe a structure. or should it be a matrix? 
+% or should it be a matrix with fm_data or fm_results type stuff?
 
+%% testing without functionalMage class
 
+taskTable = fm_taskTable();
+taskTable.content = [taskTable.content;...
+    {1, "3 1 3", "0 3 4", "1 1 1", "1 2 3", "1 2 3", "0 0 1"};...
+    {1, "3 1 3", "0 3 4", "1 1 1", "1 2 4", "1 2 4", "0 0 1"};...
+    ];
 
+simProperties = fm_simulationProperties();
+simProperties.TR = 0.5;
 
+dm = fm_designMatrix(taskTable, simProperties);
+dm.runwiseAnalysisIDs = [1 2];
+glmLSA = dm.glmLSA;
 
+mvpaLSA = dm.mvpaLSA;
 
+simulation = fm_simulation(dm.simulation, simProperties);
+simulation.generate();
 
+for i = 1:simProperties.numRuns
+    betas = fm_glm(dm.glmLSA, simulation.boldTimeSeries);
+    results = fm_mvpa(dm.mvpaLSA, betas);
+end
 
+% NEXT STEP:
+% write out the code to generate the GLM table and the MVPA table. (We
+% don't want to throw in all analysis paramters into fm_analysisInfo. That
+% will be muddy to the user.) If GLM and MVPA tables can be made
+% semi-independently, we should go for a separated out approach. Maybe
+% fm_glm will hold all the GLM parameters, fm_mvpa will hold all the MVPA
+% parameters and we don't need a different class. Ideally, taskTable and
+% the pure version of eventList will make it into neither of these classes.
+% If there's some way to simplify all of what's going on with
+% RegressionID/ClassificationGroups/NeuralPatterns into a simpler structure
+% (or somehow make all this information *inherent* to the outputs that
+% fm_glm / fm_mvpa produce) then this would reduce the complexity of this
+% whole thing to the user. 
 
+% sketch:
+% aInfo = fm_analysisInfo(fm.taskTable, fm.simulation.eventList);
+% aInfo.newDurationsAndOnsets = [];
+% aInfo.Name = "Call this something you understand";
+% glmDesignMatrix = aIinfo.glmDesignMatrix;
+% 
+% fm_glm(glmDesignMatrix, simulation.boldTimeSeries);
 
+%% inputting multiple analysis methods possibility
+glmMethods = ["LSA", "LSS"];
+hrfMethods = ["SPM12", "NSD"];
 
+for i = 1:length(glmMethods)
+    for j = 1:length(hrfMethods)
+        fm.analysisList.add(...
+            "GLM", glmMethods(i),...
+            "HRF", hrfMethods(j),...
+            "newDurationsAndOnsets", fm.taskTable(:,["Onsets", "Durations"]));
+    end
+end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-%% 
-delete(fm); clear fm;
-fm = functionalMage();
-
-T = fm.simulation.trialsTable;
-T = [T;...
-    {1, [1 2 3], ["A", "B"], [3 3 3], nan};...
-    {1, [4 5 6], ["C", "D"], [3 3 3], nan}];
-
-%%
-fm = functionalMage('MVPA');
-
-disp(fm.task.getConditionExample());
-disp(fm.task.getConditionFull());
-cond1 = struct('epochIDs', [1 2 3], ...
-    'analysisIDs', ["", "1A", ""], ...
-    'taskDurs', [3 9 3], ...
-    'taskOnset', [0 3 12], ...
-    'condProp', 4);
-cond2 = struct( ...
-    'epochIDs', [4 5 6], ...
-    'analysisIDs', ["", "1B", ""], ...
-    'taskDurs', [3 9 3], ...
-    'taskOnset', [0 3 12], ...
-    'condProp', 4);
-fm.task.addCondition(cond1, 'Visual');
-fm.task.addCondition(cond2, 'Auditory');
-
-analysis = struct('GLM', 'LSA',...
-    'HRF', 'SPM12');
-fm.addAnalysis('SPM12', analysis);
-fm.addAnalysis('Derivative', struct(...
-    'GLM', 'LSA', ...
-    'HRF', 'Derivative'));
-
-dataProperties = struct('TR', 1, ...
-    'Duration', 400, ...
-    'Voxels', 50, ...
-    'Noise', 10, ...
-    'NumRuns', 5);
-fm.data.setProperties(dataProperties);
-disp(fm.data.getProperties());
-
-fm.addMetrics('classification accuracy', 'information');
-
-fm.run('subjects', 10);
-results = fm.getResults();
-
-% results is a structure. It has 'Analysis1' and 'Analysis2'.
-% 'Analysis1'. 
-% Analysis1.ClassificationAccuracy = [0.9 ...];
-% Analysis1.Information = 0.8;
-
-%% Using functionalMage for closer to my study
-fm = functionalMage('MVPA');
-
-fm.simulation.addCondition("");
-
-fm.analysis.addDimension("GLM", ["LSA", "LSS"]);
-fm.analysis.addDimension("HRF", ["SPM12", "KK"]);
-
-results = fm.getResults();
-% results is a structure.
-% results.dimensional has size 2 x 2 representing the dimensions
-% results.Anlaysis1 contains another analysis
-% in other words, you can submit dimensions AND individual anlayses, which
-% are output differently.
-
+%% reminders
 fmCopy = copy(fm); % to copy; fmCopy = fm will just copy the handle
 delete(fm); % to delete; clear fm will just delete the handle
-
-%%
-stuff();
-function stuff()
-    x = 5;
-
-    function stuff2()
-        x = x + 1;
-    end
-
-    stuff2();
-
-    disp(x);
-end

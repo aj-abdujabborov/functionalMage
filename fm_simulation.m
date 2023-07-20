@@ -35,9 +35,6 @@ classdef fm_simulation < matlab.mixin.Copyable
             obj.HRFs     = obj.generateHRFs();
 
             for i = obj.simProperties.numRuns:-1:1
-                [obj.eventList{i}, obj.trialSequence{i}] = obj.generateEventList();
-                obj.eventList{i}                         = obj.scaleEventListByActivity(obj.eventList{i});
-
                 obj.neuralPatternPerEvent{i}       = obj.computeNeuralPatternPerEvent(obj.eventList{i}, obj.neuralPatterns);
                 obj.neuralFluctuationPerEvent{i}   = obj.generateNeuralFluctuationPerEvent(obj.eventList{i});
                 obj.totalNeuralActivityPerEvent{i} = obj.neuralPatternPerEvent{i} + obj.neuralFluctuationPerEvent{i};
@@ -46,27 +43,6 @@ classdef fm_simulation < matlab.mixin.Copyable
                 obj.noNoiseBoldTimeSeries{i} = obj.convolveWithHRFs(obj.neuralTimeSeries{i}, obj.HRFs);
                 obj.boldTimeSeries{i} = obj.noNoiseBoldTimeSeries{i} + obj.generateNoise();
             end
-        end
-
-        %%%
-        function [eventList, trialSequence] = generateEventList(obj)
-            [eventList, trialSequence] = makefmriseq(...
-                obj.taskTable.contentNumerical.Durations(:)',...
-                obj.taskTable.contentNumerical.EventIDs(:)',...
-                obj.taskTable.contentNumerical.Probability(:)',...
-                obj.simProperties.runDuration,...
-                1,...
-                obj.simProperties.itiModel,...
-                obj.simProperties.itiParams,...
-                obj.simProperties.TR,...
-                'addExtraTrials', 0);
-            eventList = eventList{1};
-            trialSequence = trialSequence{1};
-        end
-
-        %%%
-        function eventList = scaleEventListByActivity(obj, eventList)
-            eventList.Activity = obj.taskTable.NeuralIntensity(eventList.ID)';
         end
 
         %%%
