@@ -9,7 +9,7 @@ function convolvedResult = convolveByColumn(timeCourses, kernels, varargin)
 % timeCourses and value indicates the column of kernels to convolve
 % together.
 %
-% Y = CONVOLVEBYCOLUMN(A, B, [], 'trimOutput', 0) turns off trimming
+% Y = CONVOLVEBYCOLUMN(A, B, [], 'trimOutput', false) turns off trimming
 % post-convolution.
 
 %% Perform

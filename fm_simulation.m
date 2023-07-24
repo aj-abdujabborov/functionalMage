@@ -1,11 +1,8 @@
 
 classdef fm_simulation < matlab.mixin.Copyable
     properties
-        taskTable;
-        simProperties;
-
         eventList;
-        trialSequence;
+        simProperties;
 
         neuralPatterns;
         HRFs;
@@ -16,23 +13,23 @@ classdef fm_simulation < matlab.mixin.Copyable
 
         neuralTimeSeries;
         noNoiseBoldTimeSeries;
-        boldTimeSeries;
+        boldTimeSeries = fm_data.empty();
     end
  
     methods
         %%%
-        function obj = fm_simulation(taskTable, simulationProperties)
+        function obj = fm_simulation(eventList, simulationProperties)
             if (nargin > 0)
-                obj.taskTable = taskTable;
+                obj.eventList = eventList;
                 obj.simProperties = simulationProperties;
             end
         end
 
         %%%
         function generate(obj)
-            % TODO: verify taskTable and simProperties are set
+            % TODO: verify eventList and simProperties are set
             obj.neuralPatterns = obj.generateNeuralPatterns();
-            obj.HRFs     = obj.generateHRFs();
+            obj.HRFs           = obj.generateHRFs();
 
             for i = obj.simProperties.numRuns:-1:1
                 obj.neuralPatternPerEvent{i}       = obj.computeNeuralPatternPerEvent(obj.eventList{i}, obj.neuralPatterns);
@@ -41,38 +38,33 @@ classdef fm_simulation < matlab.mixin.Copyable
                 obj.neuralTimeSeries{i}            = obj.computeNeuralTimeSeries(obj.eventList{i}, obj.totalNeuralActivityPerEvent{i});
 
                 obj.noNoiseBoldTimeSeries{i} = obj.convolveWithHRFs(obj.neuralTimeSeries{i}, obj.HRFs);
-                obj.boldTimeSeries{i} = obj.noNoiseBoldTimeSeries{i} + obj.generateNoise();
+                
+                obj.boldTimeSeries(i) = fm_data(...
+                    obj.noNoiseBoldTimeSeries{i} + obj.generateNoise(),...
+                    obj.simProperties.TR);
             end
         end
 
         %%%
         function neuralPatterns = generateNeuralPatterns(obj)
-            neuralPatterns = rand(obj.taskTable.numNeuralPatterns, obj.simProperties.numVoxels);
+            tmp = cellfun(@(x) max(x.ID), obj.eventList);
+            numNeuralPatterns = max(tmp);
+            neuralPatterns = rand(numNeuralPatterns, obj.simProperties.numVoxels);
         end
 
         %%%
-        function neuralPatternPerEvent = computeNeuralPatternPerEvent(obj, eventList, neuralPatterns)
-            neuralPatternPerEvent = obj.taskTable.NeuralPatternIDs(eventList.ID);
-            neuralPatternPerEvent = neuralPatterns(neuralPatternPerEvent, :);
+        function neuralPatternPerEvent = computeNeuralPatternPerEvent(~, eventList, neuralPatterns)
+            neuralPatternPerEvent = neuralPatterns(eventList.ID, :);
             neuralPatternPerEvent = neuralPatternPerEvent .* eventList.Activity;
         end
 
         %%%
         function neuralFluctuationPerEvent = generateNeuralFluctuationPerEvent(obj, eventList)
             noiseScale = eventList.Activity * obj.simProperties.neuralFluctuationAmount;
-            if obj.simProperties.neuralFluctuationInOnlyClassifiedEvents
-                eventsToClassify = obj.taskTable.ClassificationGroups(eventList.ID) ~= obj.taskTable.NON_CLASSIFIED_EVENT;
-                noiseScale = noiseScale .* eventsToClassify(:);
-                eventsToCorrelate = eventsToClassify(:);
-            else
-                eventsToCorrelate = ones(size(noiseScale));
-            end
-            eventsToCorrelate = logical(eventsToCorrelate);
-
             neuralFluctuationPerEvent = rand(height(eventList), obj.simProperties.numVoxels) - 0.5;
             neuralFluctuationPerEvent = neuralFluctuationPerEvent .* noiseScale;
-            neuralFluctuationPerEvent(eventsToCorrelate, :) = makecorrelated(...
-                neuralFluctuationPerEvent(eventsToCorrelate, :),...
+            neuralFluctuationPerEvent = makecorrelated(...
+                neuralFluctuationPerEvent,...
                 obj.simProperties.neuralFluctuationCoherence);
         end
 

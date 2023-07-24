@@ -34,8 +34,8 @@ fm.results; % results maybe a structure. or should it be a matrix?
 
 taskTable = fm_taskTable();
 taskTable.content = [taskTable.content;...
-    {1, "3 1 3", "0 3 4", "1 1 1", "1 2 3", "1 2 3", "0 0 1"};...
-    {1, "3 1 3", "0 3 4", "1 1 1", "1 2 4", "1 2 4", "0 0 1"};...
+    {1, "3 1 3", "0 3 4", "1 1 1", "1 2 3", "1 1 2", "0 0 1"};...
+    {1, "3 1 3", "0 3 4", "1 1 1", "1 2 4", "1 1 3", "0 0 1"};...
     ];
 
 simProperties = fm_simulationProperties();
@@ -47,7 +47,7 @@ glmLSA = dm.glmLSA;
 
 mvpaLSA = dm.mvpaLSA;
 
-simulation = fm_simulation(dm.simulation, simProperties);
+simulation = fm_simulation(dm.neuralPatternIDEventList, simProperties);
 simulation.generate();
 
 for i = 1:simProperties.numRuns
@@ -93,3 +93,12 @@ end
 %% reminders
 fmCopy = copy(fm); % to copy; fmCopy = fm will just copy the handle
 delete(fm); % to delete; clear fm will just delete the handle
+
+
+%%
+TheNumbers = [-10 3 2];
+old = [-10 2 2 3 2];
+new = [-1 4 4 3 2];
+[found, idx] = ismember(TheNumbers, old);
+replaced_numbers = TheNumbers;
+replaced_numbers(found) = new(idx(found));

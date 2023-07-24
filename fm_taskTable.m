@@ -6,13 +6,6 @@ classdef fm_taskTable < matlab.mixin.Copyable
 
     properties
         contentNumerical;
-        NeuralIntensity;
-        NeuralPatternIDs;
-        AnalysisIDs;
-        ClassificationGroups;
-        EventIDs;
-
-        numNeuralPatterns;
     end
 
     properties (Access = private)
@@ -31,11 +24,6 @@ classdef fm_taskTable < matlab.mixin.Copyable
                         ];
         stringColumns = [2:7];
     end
-
-    properties (Access = public, Constant = true, Hidden = true)
-        NON_CLASSIFIED_EVENT = 0; % 0 in ClassificationGroups = do not classify
-    end
-
 
     methods
         %%%

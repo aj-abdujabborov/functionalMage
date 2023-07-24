@@ -4,11 +4,12 @@ classdef fm_designMatrix < matlab.mixin.Copyable
     properties
         runwiseAnalysisIDs;
 
-        simulationEventList;
-        simulationTrialSequence;
+        neuralPatternIDEventList;
 
         idVectors;
         timings;
+
+        doNotClassifyGroupIDs = [0]; 
     end
 
     properties (Dependent = true, SetAccess = private)
@@ -16,20 +17,18 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         mvpaLSA;
     end
 
-    properties (Access = protected)
-        NeuralPatternIDs;
+    properties (Access = private)
+        unqIDEventList;
+        trialSequence;
+
+        NeuralIntensity;
+        NeuralPatternIDs; numNeuralPatterns;
         AnalysisIDs;
         ClassificationGroups;
         EventIDs;
 
-        numNeuralPatterns;
-
-        NeuralIntensity;
-
         numRuns;
-    end
 
-    properties (Access = private)
         privateLsa = [];
     end
 
@@ -44,11 +43,12 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             obj.numRuns = simProperties.numRuns;
 
             for i = obj.numRuns:-1:1
-                [obj.simulationEventList{i}, obj.simulationTrialSequence{i}] ...
+                [obj.unqIDEventList{i}, obj.trialSequence{i}] ...
                     = generateEventList(taskTable, simProperties);
 
-                obj.simulationEventList{i} =...
-                    scaleEventListByNeuralIntensity(obj.simulationEventList{i}, obj.NeuralIntensity);
+                obj.neuralPatternIDEventList{i} = obj.unqIDEventList{i};
+                obj.neuralPatternIDEventList{i}.Activity = obj.NeuralIntensity(obj.neuralPatternIDEventList{i}.ID);
+                obj.neuralPatternIDEventList{i}.ID = obj.NeuralPatternIDs(obj.neuralPatternIDEventList{i}.ID);
             end
 
             function extractMappingVectors()
@@ -73,13 +73,9 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                 trialSequence = trialSequence{1};
             end
 
-            function eventList = scaleEventListByNeuralIntensity(eventList, NeuralIntensity)
-                eventList.Activity = NeuralIntensity(eventList.ID)';
-            end
-
-
             function collapsed = collapseCellArray(cellArray)
                 collapsed = [cellArray{:}];
+                collapsed = collapsed(:);
             end
 
             function numElements = numUniqueElements(vector)
@@ -92,12 +88,10 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         function glmLSA = get.glmLSA(obj)
             if isempty(obj.privateLsa)
                 for i = obj.numRuns:-1:1
-                    tmp = obj.AnalysisIDs(obj.simulationEventList{i}.ID);
-                    obj.privateLsa.unqID2AnalysisID{i} = tmp(:);
+                    obj.privateLsa.unqID2AnalysisID{i} = obj.AnalysisIDs(obj.unqIDEventList{i}.ID);
                     
-
-                    obj.privateLsa.unqID2RegressionID{i} = nan(size(obj.simulationEventList{i}.ID));
                     
+                    obj.privateLsa.unqID2RegressionID{i} = nan(size(obj.unqIDEventList{i}.ID));
                     assignID = 1;
                     runwiseEventIdx = obj.privateLsa.unqID2AnalysisID{i} == obj.runwiseAnalysisIDs;
                     for j = 1:length(obj.runwiseAnalysisIDs)
@@ -111,7 +105,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
 
 
                     obj.privateLsa.regressionDesignMatrix{i} = ...
-                        obj.simulationEventList{i};
+                        obj.neuralPatternIDEventList{i};
                     obj.privateLsa.regressionDesignMatrix{i}.ID = ...
                         obj.privateLsa.unqID2RegressionID{i};
                 end
@@ -128,7 +122,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
 
             if obj.isFieldClear(PL, 'regressionID2AnalysisID')
                 for i = obj.numRuns:-1:1 
-                    PL.regressionID2AnalysisID{i} = getRegressionID2AnalysisID( ...
+                    PL.regressionID2AnalysisID{i} = getRegressionID2AnalysisID(...
                         PL.unqID2RegressionID{i},...
                         PL.unqID2AnalysisID{i});
 
@@ -156,15 +150,14 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             end
 
             function classifLabels = getRegressionID2ClassifLabel(analysisID)
-                mapper = obj.makeIdxOfA2ValueOfBMap(obj.AnalysisIDs, obj.NeuralPatternIDs);
-                classifLabels = mapper(analysisID);
-                classifLabels = classifLabels(:);
+                nonClassif = ismember(obj.ClassificationGroups, obj.doNotClassifyGroupIDs);
+                old = obj.AnalysisIDs;      old(nonClassif) = 0;
+                new = obj.NeuralPatternIDs; new(nonClassif) = 0;
+                classifLabels = obj.replaceValues(analysisID, old, new);
             end
 
             function classifGroups = getRegressionID2ClassifGroup(analysisID)
-                mapper = obj.makeIdxOfA2ValueOfBMap(obj.AnalysisIDs, obj.ClassificationGroups);
-                classifGroups = mapper(analysisID);
-                classifGroups = classifGroups(:);
+                classifGroups = obj.replaceValues(analysisID, obj.AnalysisIDs, obj.ClassificationGroups);
             end
         end
     end
@@ -181,15 +174,22 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             bEmpty = isempty(structVar) || ~isfield(structVar, fieldname) || isempty(structVar.(fieldname));
         end
 
-        function idxOfAIntoValueOfB = makeIdxOfA2ValueOfBMap(A, B)
+        function data = replaceValues(data, A, B)
             assert(isequal(size(A), size(B)), "The two vectors must be equal sizes");
             
             unqVecA = unique(A);
-            for vecAValue = unqVecA(end:-1:1)
-                valInVecB = B(A == vecAValue);
-                assert(numel(unique(valInVecB)) == 1, "All elements of the same value in vecA must map onto elments of the same value in vecB");
-                idxOfAIntoValueOfB(vecAValue) = unique(valInVecB); %#ok<AGROW>
+            for vecAValue = unqVecA(:).'
+                valInVecB = unique(B(A == vecAValue));
+                assert(numel(valInVecB) <= 1, "All elements of the same value in vecA must map onto elments of the same value in vecB");
+                data(data == vecAValue) = valInVecB;
             end
+        end
+
+        %%% destined to trash
+        function replaced = replaceValues2(data, old, new)
+            [found, idx] = ismember(data, old);
+            replaced = data;
+            replaced(found) = new(idx(found));
         end
     end
 
