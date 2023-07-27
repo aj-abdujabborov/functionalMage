@@ -36,10 +36,10 @@ classdef fm_simulation < matlab.mixin.Copyable
             end
 
             for i = obj.simProperties.numRuns:-1:1
-                obj.neuralPatternPerEvent{i}       = obj.computeNeuralPatternPerEvent(obj.eventList{i}, obj.neuralPatterns);
-                obj.neuralFluctuationPerEvent{i}   = obj.generateNeuralFluctuationPerEvent(obj.eventList{i});
+                obj.neuralPatternPerEvent{i}       = obj.computeNeuralPatternPerEvent(obj.eventList(i), obj.neuralPatterns);
+                obj.neuralFluctuationPerEvent{i}   = obj.generateNeuralFluctuationPerEvent(obj.eventList(i));
                 obj.totalNeuralActivityPerEvent{i} = obj.neuralPatternPerEvent{i} + obj.neuralFluctuationPerEvent{i};
-                obj.neuralTimeSeries{i}            = obj.computeNeuralTimeSeries(obj.eventList{i}, obj.totalNeuralActivityPerEvent{i});
+                obj.neuralTimeSeries{i}            = obj.computeNeuralTimeSeries(obj.eventList(i), obj.totalNeuralActivityPerEvent{i});
 
                 obj.noNoiseBoldTimeSeries{i} = obj.convolveWithHRFs(obj.neuralTimeSeries{i}, obj.HRFs);
                 
@@ -51,8 +51,7 @@ classdef fm_simulation < matlab.mixin.Copyable
 
         %%%
         function neuralPatterns = generateNeuralPatterns(obj)
-            tmp = cellfun(@(x) max(x.ID), obj.eventList);
-            numNeuralPatterns = max(tmp);
+            numNeuralPatterns = max(cat(1, obj.eventList.ID));
             neuralPatterns = rand(numNeuralPatterns, obj.simProperties.numVoxels);
         end
 
@@ -75,11 +74,9 @@ classdef fm_simulation < matlab.mixin.Copyable
         %%%
         function neuralTimeSeries = computeNeuralTimeSeries(obj, eventList, eventPatterns)
             eventList.ID = (1:height(eventList))';
-            timePointsOfEachEvent = computeDesignMatrix(...
-                eventList,...
-                obj.simProperties.runDuration,...
-                obj.simProperties.TR);
-
+            timePointsOfEachEvent = eventList.computeDesignMatrix(...
+                                        obj.simProperties.TR);
+            
             neuralTimeSeries = zeros(obj.simProperties.numTRs, obj.simProperties.numVoxels);
             for ev = 1:height(eventList)
                 thisEventTimePoints = logical(timePointsOfEachEvent(:,ev));

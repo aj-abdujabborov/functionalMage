@@ -4,7 +4,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
     properties
         runwiseAnalysisIDs;
 
-        neuralPatternIDEventList;
+        neuralPatternIDEventList = fm_eventList.empty;
 
         idVectors;
         timings;
@@ -18,7 +18,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
     end
 
     properties (Access = private)
-        unqIDEventList;
+        unqIDEventList = fm_eventList.empty;
         trialSequence;
 
         NeuralIntensity;
@@ -35,6 +35,10 @@ classdef fm_designMatrix < matlab.mixin.Copyable
     methods
         %%%
         function obj = fm_designMatrix(taskTable, simProperties)
+            if nargin == 0
+                return;
+            end
+
             % TODO: check that inputs are of correct classes.
             extractMappingVectors();
             obj.NeuralIntensity = collapseCellArray(taskTable.contentNumerical.NeuralIntensity);
@@ -43,12 +47,12 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             obj.numRuns = simProperties.numRuns;
 
             for i = obj.numRuns:-1:1
-                [obj.unqIDEventList{i}, obj.trialSequence{i}] ...
+                [obj.unqIDEventList(i), obj.trialSequence{i}] ...
                     = generateEventList(taskTable, simProperties);
 
-                obj.neuralPatternIDEventList{i} = obj.unqIDEventList{i};
-                obj.neuralPatternIDEventList{i}.Activity = obj.NeuralIntensity(obj.neuralPatternIDEventList{i}.ID);
-                obj.neuralPatternIDEventList{i}.ID = obj.NeuralPatternIDs(obj.neuralPatternIDEventList{i}.ID);
+                obj.neuralPatternIDEventList(i) = obj.unqIDEventList(i);
+                obj.neuralPatternIDEventList(i).Activity = obj.NeuralIntensity(obj.neuralPatternIDEventList(i).ID);
+                obj.neuralPatternIDEventList(i).ID = obj.NeuralPatternIDs(obj.neuralPatternIDEventList(i).ID);
             end
 
             function extractMappingVectors()
@@ -69,7 +73,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                     simProperties.itiParams,...
                     simProperties.TR,...
                     'addExtraTrials', 0);
-                eventList = eventList{1};
+                eventList = fm_eventList(eventList{1}, simProperties.runDuration);
                 trialSequence = trialSequence{1};
             end
 
@@ -88,10 +92,9 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         function glmLSA = get.glmLSA(obj)
             if isempty(obj.privateLsa)
                 for i = obj.numRuns:-1:1
-                    obj.privateLsa.unqID2AnalysisID{i} = obj.AnalysisIDs(obj.unqIDEventList{i}.ID);
+                    obj.privateLsa.unqID2AnalysisID{i} = obj.AnalysisIDs(obj.unqIDEventList(i).ID);
                     
-                    
-                    obj.privateLsa.unqID2RegressionID{i} = nan(size(obj.unqIDEventList{i}.ID));
+                    obj.privateLsa.unqID2RegressionID{i} = nan(size(obj.unqIDEventList(i).ID));
                     assignID = 1;
                     runwiseEventIdx = obj.privateLsa.unqID2AnalysisID{i} == obj.runwiseAnalysisIDs;
                     for j = 1:length(obj.runwiseAnalysisIDs)
@@ -104,18 +107,18 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                         = assignID : (assignID + sum(nonRunwiseEventIdx) - 1);
 
 
-                    obj.privateLsa.regressionDesignMatrix{i} = ...
-                        obj.neuralPatternIDEventList{i};
-                    obj.privateLsa.regressionDesignMatrix{i}.ID = ...
+                    obj.privateLsa.regressionEventList(i) = ...
+                        obj.unqIDEventList(i);
+                    obj.privateLsa.regressionEventList(i).ID = ...
                         obj.privateLsa.unqID2RegressionID{i};
                 end
             end
 
-            glmLSA = obj.privateLsa.regressionDesignMatrix;
+            glmLSA = obj.privateLsa.regressionEventList;
         end
 
         function mvpaLSA = get.mvpaLSA(obj)
-            if obj.isFieldClear(obj.privateLsa, 'regressionDesignMatrix')
+            if obj.isFieldClear(obj.privateLsa, 'regressionEventList')
                 obj.glmLSA();
             end
             PL = obj.privateLsa;

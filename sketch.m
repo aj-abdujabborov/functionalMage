@@ -50,10 +50,28 @@ mvpaLSA = dm.mvpaLSA;
 simulation = fm_simulation(dm.neuralPatternIDEventList, simProperties);
 simulation.generate();
 
-for i = 1:simProperties.numRuns
-    betas = fm_glm(dm.glmLSA, simulation.boldTimeSeries);
-    results = fm_mvpa(dm.mvpaLSA, betas);
-end
+analysisList = fm_analysisList;
+glm.framework = "LSS";
+glm.hrf = "Library";
+glm.basis = randn(1,5);
+analysisList(1) = glm;
+analysisList.add('glm.framework', 'LSS',...
+    'glm.hrf', 'Library',...
+    'glm.basis', randn(10,5),...
+    'mvpa.metric', 'information');
+analysisList.display();
+
+cellArrayOfAnalysisResults = analysisList.perform();
+
+glm = fm_glm(simulation.boldTimeSeries, dm.glmLSA);
+glm.hrf = "nsd+canonical";
+glm.execute();
+glm.framework = "LSS";
+glm.basis = randn(1,5); % [some HRF matrix or HRF parameters]
+
+
+betas = glm.betas;
+results = fm_mvpa(dm.mvpaLSA, betas);
 
 % NEXT STEP:
 % write out the code to generate the GLM table and the MVPA table. (We
