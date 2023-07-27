@@ -78,8 +78,7 @@ f = zeros(rs);
 
 %-Only defined for strictly positive h & l. Return NaN if undefined.
 md = ( ones(size(x))  &  h>0  &  l>0 );
-if any(~md(:)), f(~md) = NaN;
-	warning('Returning NaN for out of range arguments'), end
+if any(~md(:)), f(~md) = NaN; end
 
 %-Degenerate cases at x==0: h<1 => f=Inf; h==1 => f=l; h>1 => f=0
 ml = ( md  &  x==0  &  h<1 );

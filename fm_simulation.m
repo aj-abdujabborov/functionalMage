@@ -29,7 +29,11 @@ classdef fm_simulation < matlab.mixin.Copyable
         function generate(obj)
             % TODO: verify eventList and simProperties are set
             obj.neuralPatterns = obj.generateNeuralPatterns();
-            obj.HRFs           = obj.generateHRFs();
+            if isempty(obj.simProperties.hrfSet)
+                obj.HRFs = obj.generateHRFs();
+            else
+                obj.HRFs = obj.simProperties.hrfSet;
+            end
 
             for i = obj.simProperties.numRuns:-1:1
                 obj.neuralPatternPerEvent{i}       = obj.computeNeuralPatternPerEvent(obj.eventList{i}, obj.neuralPatterns);
@@ -86,15 +90,16 @@ classdef fm_simulation < matlab.mixin.Copyable
 
         %%%
         function HRFs = generateHRFs(obj)
+            opts = [];
+            opts.correlationWithCanonical = obj.simProperties.hrfsCorrelationWithDoubleGammaCanonical;
+            opts.library = obj.simProperties.hrfLibrary;
+
             cacheLocation = fullfile(functionalMage.getCacheDirectory(), 'hrfDatabase.mat');
-            hrfLen = 40;
-            HRFs = getHrfDb(...
-                obj.simProperties.hrfsCorrelationWithDoubleGammaCanonical,...
-                obj.simProperties.numVoxels,...
-                obj.simProperties.TR,...
-                obj.simProperties.hrfLibrary,...
-                cacheLocation, ...
-                hrfLen);
+
+            HRFs = fm_hrf.getHrfsCache(obj.simProperties.TR,...
+                                       obj.simProperties.numVoxels,...
+                                       cacheLocation,...
+                                       opts);
         end
 
         %%%
