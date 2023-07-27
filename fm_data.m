@@ -1,18 +1,25 @@
 classdef fm_data < matlab.mixin.Copyable
     properties
         data;
-        IDs;
         TR;
 
         rowName;
         dataName;
     end
 
-    properties (SetAccess = private, Dependent = true)
+    properties (Dependent = true)
+        IDs;
+    end
+
+    properties (Dependent = true, SetAccess = private)
         numVoxels;
         numTRs;
         duration;
         numRows;
+    end
+
+    properties (Access = private)
+        privateIDs;
     end
 
     methods
@@ -27,7 +34,21 @@ classdef fm_data < matlab.mixin.Copyable
         end
     end
 
-    methods % Get methods
+    methods % Get and Set methods
+        function set.IDs(obj, IDs)
+            if isempty(IDs), return; end
+            
+            assert(height(IDs) == obj.numRows,...
+                  "The number of rows in IDs should be the same as in data");
+            assert(width(IDs) == 1,...
+                   "IDs should be a column vector");
+            obj.privateIDs = IDs;
+        end
+
+        function IDs = get.IDs(obj)
+            IDs = obj.privateIDs;
+        end
+
         function numVoxels = get.numVoxels(obj)
             numVoxels = size(obj.data, 2);
         end
@@ -45,34 +66,41 @@ classdef fm_data < matlab.mixin.Copyable
         end
     end
 
-    methods % Operator overloading
-        % TODO: finish if overloading becomes very beneficial
-        %{
-        function outObj = plus(inObj1, inObj2)
-            outObj = inObj1;
+    methods % Overload MATLAB functions
+        function dataCombined = cat(dataVector)
+            assert(isa(dataVector, 'fm_data'), "Input is not of fm_data type.");
+            
+            uniqueTR = unique([dataVector.TR]);
+            assert(length(uniqueTR) == 1, "All TRs must be the same.");
+            assert(has1UniqueValue([dataVector.numVoxels]), "Number of voxels must be the same for all elements.");
 
-            if isempty(inObj1.TR)
-                outObj.TR = inObj2.TR;
-            elseif isempty(inObj2.TR)
-                outObj.TR = inObj1.TR;
-            else
-                assert(inObj1.TR == inObj1.TR,...
-                    "TRs of two fm_data objects are different.");
-                outObj.TR = inObj1.TR;
+            dataCombined = fm_data(cat(1, dataVector.data), ...
+                                   uniqueTR,...
+                                   cat(1, dataVector.IDs));
+            if has1UniqueString({dataVector.rowName})
+                dataCombined.rowName = dataVector(1).rowName;
+            end
+            if has1UniqueString({dataVector.dataName})
+                dataCombined.dataName = dataVector(1).dataName;
+            end
+            
+            function bool = has1UniqueValue(vec)
+                bool = length(unique(vec)) == 1;
             end
 
-            if isempty(inObj1.IDs)
-                outObj.IDs = inObj2.IDs;
-            elseif isempty(inObj2.TR)
-                outObj.IDs = inObj1.IDs;
-            else
-                assert(inObj1.IDs == inObj1.IDs,...
-                    "IDs of two fm_data objects are different.");
-                outObj.IDs = inObj1.IDs;
+            function bool = has1UniqueString(vec)
+                if isempty(vec{1})
+                    bool = false;
+                else
+                    vec = string(vec);
+                    bool = has1UniqueValue(vec);
+                end
             end
-
         end
-        %}
+
+        function dataCombined = plus(inObj1, inObj2)
+            dataCombined = cat([inObj1, inObj2]);
+        end
     end
 
     methods (Static = true)
