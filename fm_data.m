@@ -1,10 +1,10 @@
 classdef fm_data < matlab.mixin.Copyable
     properties
-        data;
-        TR;
+        data {mustBeNumeric};
+        TR {mustBePositive};
 
-        rowName;
-        dataName;
+        rowName {mustBeText};
+        dataName {mustBeText};
     end
 
     properties (Dependent = true)
@@ -25,8 +25,8 @@ classdef fm_data < matlab.mixin.Copyable
     methods
         function obj = fm_data(data, TR, IDs)
             if nargin >= 1, obj.data = data; end
-            if nargin >= 2, obj.TR = TR;     end
-            if nargin >= 3, obj.IDs = IDs;   end
+            if nargin >= 2, obj.TR   = TR;   end
+            if nargin >= 3, obj.IDs  = IDs;  end
         end
 
         function save2File(obj)
@@ -43,6 +43,12 @@ classdef fm_data < matlab.mixin.Copyable
             assert(width(IDs) == 1,...
                    "IDs should be a column vector");
             obj.privateIDs = IDs;
+        end
+
+        function set.data(obj, data)
+            assert(width(data) > 0, "Input data must have more than 0 columns.");
+            assert(height(data) > 0, "Input data must have more than 0 rows.");
+            obj.data = data;
         end
 
         function IDs = get.IDs(obj)
@@ -67,23 +73,27 @@ classdef fm_data < matlab.mixin.Copyable
     end
 
     methods % Overload MATLAB functions
-        function dataCombined = cat(dataVector)
-            assert(isa(dataVector, 'fm_data'), "Input is not of fm_data type.");
-            
-            uniqueTR = unique([dataVector.TR]);
-            assert(length(uniqueTR) == 1, "All TRs must be the same.");
-            assert(has1UniqueValue([dataVector.numVoxels]), "Number of voxels must be the same for all elements.");
+        function TR = getTR(objVector)
+            TR = objVector(1).TR;
+        end
 
-            dataCombined = fm_data(cat(1, dataVector.data), ...
+        function dataCombined = cat(objVector)
+            uniqueTR = unique([objVector.TR]);
+            assert(length(uniqueTR) <= 1, "All TRs must be the same.");
+            assert(has1UniqueValue([objVector.numVoxels]), "Number of voxels must be the same for all elements.");
+
+            dataCombined = fm_data(cat(1, objVector.data), ...
                                    uniqueTR,...
-                                   cat(1, dataVector.IDs));
-            if has1UniqueString({dataVector.rowName})
-                dataCombined.rowName = dataVector(1).rowName;
+                                   cat(1, objVector.IDs));
+
+            if has1UniqueString({objVector.rowName})
+                dataCombined.rowName = objVector(1).rowName;
             end
-            if has1UniqueString({dataVector.dataName})
-                dataCombined.dataName = dataVector(1).dataName;
+            if has1UniqueString({objVector.dataName})
+                dataCombined.dataName = objVector(1).dataName;
             end
             
+            %________________
             function bool = has1UniqueValue(vec)
                 bool = length(unique(vec)) == 1;
             end

@@ -1,65 +1,16 @@
 classdef fm_eventList
     properties (Dependent = true)
-        ID;
-        Activity;
-        Duration;
-        Onset;
+        ID {mustBePositive, mustBeInteger};
+        Activity {mustBePositive};
+        Duration {mustBeNonnegative};
+        Onset {mustBeNonnegative};
+        content (:,4) table;
+        runDuration (1,1) {mustBeNonnegative};
     end
 
-    properties
-        content;
-        runDuration;
-    end    
-
-    methods % Set and Get methods
-        function obj = set.content(obj, content)
-            assert(istable(content), "Content needs to be a table");
-            tableFields = summary(content);
-            if ~all(isfield(tableFields, {'ID', 'Activity', 'Duration', 'Onset'}))
-                error("A necessary field is missing from the table");
-            end
-            obj.content = content;
-        end
-
-        function obj = set.ID(obj, ID)
-            assert(height(obj.content) == height(ID),...
-                   "Number of rows does not match.");
-            obj.content.ID = ID;
-        end
-
-        function obj = set.Activity(obj, Activity)
-            assert(height(obj.content) == height(Activity),...
-                   "Number of rows does not match.");
-            obj.content.Activity = Activity;
-        end
-
-        function obj = set.Duration(obj, Duration)
-            assert(height(obj.content) == height(Duration),...
-                   "Number of rows does not match.");
-            obj.content.Duration = Duration;
-        end
-
-        function obj = set.Onset(obj, Onset)
-            assert(height(obj.content) == height(Onset),...
-                   "Number of rows does not match.");
-            obj.content.Onset = Onset;
-        end
-
-        function ID = get.ID(obj)
-            ID = obj.content.ID;
-        end
-
-        function Activity = get.Activity(obj)
-            Activity = obj.content.Activity;
-        end
-
-        function Duration = get.Duration(obj)
-            Duration = obj.content.Duration;
-        end
-
-        function Onset = get.Onset(obj)
-            Onset = obj.content.Onset;
-        end
+    properties (Access = private)
+        privateContent;
+        privateRunDuration;
     end
 
     methods
@@ -99,6 +50,12 @@ classdef fm_eventList
         end
 
         function desMat = computeDesignMatrix(eventList, TR, nColumns)
+            arguments
+                eventList;
+                TR (1,1) {mustBePositive};
+                nColumns (1,1) {mustBePositive};
+            end
+
             if ~(exist('nColumns', 'var') && ~isempty(nColumns))
                 nColumns = max(eventList.ID);
             end
@@ -124,6 +81,72 @@ classdef fm_eventList
             
                 desMat(fromRow:toRow, eventList.ID(i)) = desMat(fromRow:toRow, eventList.ID(i)) + activityColumn;
             end
+        end
+    end
+
+    methods % Set and Get methods
+        %%%
+        function obj = set.ID(obj, ID)
+            obj.privateContent.ID(:) = ID(:);
+        end
+
+        function ID = get.ID(obj)
+            ID = obj.content.ID;
+        end
+
+        %%%
+        function obj = set.Activity(obj, Activity)
+            obj.privateContent.Activity(:) = Activity(:);
+        end
+
+        function Activity = get.Activity(obj)
+            Activity = obj.content.Activity;
+        end
+
+        %%%
+        function obj = set.Duration(obj, Duration)
+            obj.privateContent.Duration(:) = Duration(:);
+        end
+
+        function Duration = get.Duration(obj)
+            Duration = obj.content.Duration;
+        end
+
+        %%%
+        function obj = set.Onset(obj, Onset)
+            obj.privateContent.Onset(:) = Onset(:);
+        end
+
+        function Onset = get.Onset(obj)
+            Onset = obj.content.Onset;
+        end
+
+        %%%
+        function obj = set.content(obj, content)
+            tableFields = summary(content);
+            if ~all(isfield(tableFields, {'ID', 'Activity', 'Duration', 'Onset'}))
+                error("A necessary field is missing from the table");
+            end
+            obj.privateContent = table();
+            obj.ID = content.ID;
+            obj.Activity = content.Activity;
+            obj.Duration = content.Duration;
+            obj.Onset = content.Onset;
+        end
+
+        function content = get.content(obj)
+            content = obj.privateContent;
+        end
+
+        %%%
+        function obj = set.runDuration(obj, runDuration)
+            assert(runDuration >= max(obj.Onset + obj.Duration),...
+                   "Event timings exceed specified run duration.");
+            obj.privateRunDuration = runDuration;
+        end
+
+        function runDuration = get.runDuration(obj)
+            runDuration = obj.privateRunDuration;
         end
     end
 end

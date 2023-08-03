@@ -5,6 +5,8 @@ classdef fm_hrf
 
     methods (Static = true)
         function basisData = getAllNsdHrfs(TR)
+            obj.checkTRValidity(TR);
+
             load('NaturalScenesDatasetHRFs.mat', 'params');
             for i = 20:-1:1
                 basisData(:,i) = simtb_spm_hrf(TR, params(i,:));
@@ -13,17 +15,23 @@ classdef fm_hrf
         end
 
         function basisData = getNsdHrf(TR)
+            obj.checkTRValidity(TR);
+
             load('NaturalScenesDatasetHRFs.mat', 'params');
             basisData = simtb_spm_hrf(TR, params(randi(20),:));
             basisData = basisData ./ max(basisData);
         end
 
         function basisData = getCanonicalHrf(TR)
+            obj.checkTRValidity(TR);
+
             basisData = simtb_spm_hrf(TR, fm_hrf.canonicalParams);
             basisData = basisData ./ max(basisData);
         end
 
         function basisData = getSimTbHrf(TR)
+            obj.checkTRValidity(TR);
+
             % Code from SimTB package for MATLAB
             % https://pubmed.ncbi.nlm.nih.gov/22178299/
             params = nan(1, 7);
@@ -40,9 +48,14 @@ classdef fm_hrf
         end
 
         function basisData = getDerivativeHrfs(TR, numDerivatives)
-            % Based on SPM12 code
+            arguments
+                TR (1,1) {mustBePositive};
+                numDerivatives (1,1) {mustBeNonnegative, mustBeLessThan(numDerivatives, 3)};
+            end
+            
             [basisData, p] = simtb_spm_hrf(TR, fm_hrf.canonicalParams);
             
+            % Based on SPM12 code
             if numDerivatives >= 1
                 dp = 1;
                 p(6) = p(6) + dp;
@@ -62,6 +75,13 @@ classdef fm_hrf
         end
 
         function basisData = getHrfsCache(TR, numHrfsToGet, cacheLocation, opts)
+            arguments
+                TR (1,1) {mustBePositive};
+                numHrfsToGet (1,1) {mustBePositive};
+                cacheLocation {mustBeText};
+                opts {mustBeA(opts, 'struct')};
+            end
+
             opts  = fillDefaultParameters(opts);
             cache = makeOrLoadCache(opts);
 
@@ -130,6 +150,11 @@ classdef fm_hrf
         end
 
         function cache = getHrfsWithCorrelation(TR, opts)
+            arguments
+                TR (1,1) {mustBeFinite};
+                opts {mustBeA(opts, 'struct')};
+            end
+
             cache.opts = opts;
 
             % Shortened variable
@@ -202,6 +227,10 @@ classdef fm_hrf
                 R(k,k) = norm(Q(:,k))';
                 Q(:,k) = Q(:,k)/R(k,k);
             end
+        end
+
+        function checkTRValidity(TR)
+            assert(numel(TR) == 1 && TR > 0, "TR should be a single value larger than 0");
         end
     end
 end
