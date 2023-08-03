@@ -50,6 +50,7 @@ mvpaLSA = dm.mvpaLSA;
 simulation = fm_simulation(dm.neuralPatternIDEventList, simProperties);
 simulation.generate();
 
+%{
 analysisList = fm_analysisList;
 glm.framework = "LSS";
 glm.hrf = "Library";
@@ -61,12 +62,16 @@ analysisList.add('glm.framework', 'LSS',...
     'mvpa.metric', 'information');
 analysisList.display();
 
+
 cellArrayOfAnalysisResults = analysisList.perform();
+%}
 
 glm = fm_glm(simulation.boldTimeSeries, dm.glmLSA);
-glm.hrf = "nsd+canonical";
-glm.execute();
+% glm.hrf = "nsd+canonical";
+glm.hrf = 'canonical';
 glm.framework = "LSS";
+glm.findBestHrfsWithSuperEvent = false;
+glm.execute();
 glm.basis = randn(1,5); % [some HRF matrix or HRF parameters]
 
 
