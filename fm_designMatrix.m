@@ -157,6 +157,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                 old = obj.AnalysisIDs;      old(nonClassif) = 0;
                 new = obj.NeuralPatternIDs; new(nonClassif) = 0;
                 classifLabels = obj.replaceValues(analysisID, old, new);
+                % CHECK REPLACEVALUES FUNCTION
             end
 
             function classifGroups = getRegressionID2ClassifGroup(analysisID)
@@ -177,14 +178,15 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             bEmpty = isempty(structVar) || ~isfield(structVar, fieldname) || isempty(structVar.(fieldname));
         end
 
-        function data = replaceValues(data, A, B)
+        function replaced = replaceValues(data, A, B)
             assert(isequal(size(A), size(B)), "The two vectors must be equal sizes");
             
-            unqVecA = unique(A);
-            for vecAValue = unqVecA(:).'
-                valInVecB = unique(B(A == vecAValue));
-                assert(numel(valInVecB) <= 1, "All elements of the same value in vecA must map onto elments of the same value in vecB");
-                data(data == vecAValue) = valInVecB;
+            replaced = data;
+            unqA = unique(A);
+            for currUnqA = unqA(:).'
+                correspondingB = unique(B(A == currUnqA));
+                assert(numel(correspondingB) <= 1, "All elements of the same value in vecA must map onto elments of the same value in vecB");
+                replaced(data == currUnqA) = correspondingB;
             end
         end
 
