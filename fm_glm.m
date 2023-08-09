@@ -1,52 +1,52 @@
+% Guide notes
+
+% Code notes
+% * Derivative works with frameworks 'OLS' and 'findBestHrfs' but not with
+% 'LSS'.
 
 classdef fm_glm < matlab.mixin.Copyable
     properties
         fmriData (1,:) fm_data;
         eventList (1,:) fm_eventList;
 
-        framework {matlab.system.mustBeMember(framework, {'ols', 'lss'})} = 'OLS';
+        framework string {matlab.system.mustBeMember(framework, {'findBestHrfs', 'ols', 'lss'})} = "OLS";
         lssEventsToDo;
 
-        hrf {matlab.system.mustBeMember(hrf,...
-            {'nsd', 'nsd+canonical', 'canonical',...
-            'derivative-1', 'derivative-2', 'custom'})} = 'canonical';
-        hrfsMatrix;
+        hrf (1,1) string {matlab.system.mustBeMember(hrf,...
+                   {'nsd', 'nsd+canonical', 'canonical',...
+                    'derivative-1', 'derivative-2', 'custom'})} = "canonical";
+        hrfsMatrix (:,:) uint32 {mustBeFinite};
         hrfsIdx (1,:) {mustBeInteger, mustBePositive};
 
-        nuissances {matlab.system.mustBeMember(nuissances, {'baselines', 'custom'})} = 'baselines';
-        nuissancesData;
+        nuissances (1,1) string {matlab.system.mustBeMember(nuissances, {'baselines', 'custom'})} = "baselines";
+        nuissancesData (1,:) fm_data;
 
         ttestContrasts {mustBeFinite};
 
-        findBestHrfsWithSuperEvent = true;
-
-        saveFits (1,1) logical;
-        saveRsqs (1,1) logical;
-        saveDesignMatrices (1,1) logical;
+        saveFits (1,1) logical = true;
+        saveDesignMatrices (1,1) logical = true;
+            % NOT IMPLEMENTED YET
     end
 
     properties (SetAccess = protected)
-        betas;
-        fits;
-        tstats;
+        results; 
     end
 
     properties (Access = private)
-        numVoxels;
         numRuns;
         numRegressors;
 
         dataTR;
         desMatTR;
-        downsampleDesMat;
+        bDownsampleDesMat;
 
         privateLssEventsToDo;
 
-        bTtestContrasts;
+        saveTstats;
     end
 
     methods
-        function obj = fm_glm(fmriData, eventList, varargin)
+        function obj = fm_glm(fmriData, eventList)
             if nargin > 0
                 obj.fmriData = fmriData;
             end
@@ -58,40 +58,60 @@ classdef fm_glm < matlab.mixin.Copyable
 
     methods
         function execute(obj)
-            obj.runPreparations();
+            obj.checkProperties();
             EL = obj.eventList;
 
-            if obj.findBestHrfsWithSuperEvent
-                switch lower(obj.hrf)
-                    case {'nsd+canonical', 'nsd', 'custom'}
-                        desMat = EL.cat().openIntoUniqueEvents().computeDesignMatrix(obj.dataTR);
-                        [obj.hrfsIdx] = obj.performLibrary(desMat, cat(obj.nuissancesData), cat(obj.fmriData));
-                        % TODO: make computeDesignMatrix return an fm_data
-                    case {'derivative-1', 'derivative-2'}
-                        desMat = EL.cat().collapseIntoSuperEvent().computeDesignMatrix(obj.dataTR);
-                        obj.doHrfDerivative(desMat, cat(obj.nuissancesData), cat(obj.fmriData));
+            if lower(obj.framework) == "findbesthrfs"
+                if any(contains(obj.hrf, "derivative"))
+                    desMat = EL.cat().collapseIntoSuperEvent().computeDesignMatrix(obj.dataTR);
+                    obj.results = obj.analyzeWithDerivatives(desMat, diagCat(obj.nuissancesData), cat(obj.fmriData));
+                else
+                    desMat = EL.cat().openIntoUniqueEvents().computeDesignMatrix(obj.dataTR);
+                    obj.results = obj.analyzeWithLibrary(desMat, diagCat(obj.nuissancesData), cat(obj.fmriData));
                 end
-            else
-                switch lower(obj.framework)
-                    % TODO: you should be able to do derivative without collapsing
-                    case 'ols'
-                        for i = obj.numRuns:-1:1
-                            desMat = EL(i).computeDesignMatrix(obj.dataTR);
-                            obj.performGlmWithGivenHRFs(desMat, obj.nuissancesData(i), obj.fmriData(i));
-                        end
-                    case 'lss'
-                        for i = obj.numRuns:-1:1
-                            obj.doLSS(EL(i), obj.nuissancesData(i), obj.fmriData(i));
-                        end
+
+            elseif lower(obj.framework) == "ols"
+                if any(contains(obj.hrf, 'derivative'))
+                    obj.results = struct('betas', fm_data.empty,...
+                                         'biasCorrectedBetas', fm_data.empty,...
+                                         'fits', fm_data.empty,...
+                                         'tstats', fm_data.empty,...
+                                         'RSqs', []);
+
+                    for i = obj.numRuns:-1:1
+                        desMat = EL(i).computeDesignMatrix(obj.dataTR);
+                        obj.results(i) = obj.analyzeWithDerivatives(desMat, obj.nuissancesData(i), obj.fmriData(i));
+                    end
+
+                else
+                    obj.results = struct('betas', fm_data.empty,...
+                                         'fits', fm_data.empty,...
+                                         'tstats', fm_data.empty,...
+                                         'RSqs', []);
+
+                    for i = obj.numRuns:-1:1
+                        desMat = EL(i).computeDesignMatrix(obj.dataTR);
+                        obj.results(i) = obj.analyzeWithGivenHrfs(desMat, obj.nuissancesData(i), obj.fmriData(i));
+                    end
+                end
+
+            elseif lower(obj.framework) == "lss"
+                obj.results = struct('betas', fm_data.empty);
+
+                for i = obj.numRuns:-1:1
+                    obj.results(i) = obj.performLSS(EL(i), obj.nuissancesData(i), obj.fmriData(i), obj.lssEventsToDo{i});
                 end
             end
         end
 
-        function [betas, fits] = doLSS(obj, EL, nuissancesData, fmriData)
-            betas = nan(height(EL), fmriData.numVoxels);
+        function out = performLSS(obj, EL, nuissancesData, fmriData, lssEventsToDo)
+            obj.saveFits = false;
+            obj.saveTstats = false;
+
+            out = obj.preallocateOutputStructure(height(EL), fmriData.numTRs, ["betas"]);
 
             numEventsPerID = sum(EL.ID == unique(EL.ID)', 1);
-            for i = obj.lssEventsToDo
+            for i = lssEventsToDo
                 ELCopy = EL;
 
                 if numEventsPerID(EL.ID(i)) > 1
@@ -102,53 +122,53 @@ classdef fm_glm < matlab.mixin.Copyable
                 end
 
                 desMat = ELCopy.computeDesignMatrix(obj.desMatTR);
-                [betasTmp, fitTmp, rsqsTmp] = obj.performGlmWithGivenHRFs(desMat, nuissancesData, fmriData);
-                betas(i, :) = betasTmp(targetEventID, :);
-            end
-
-
-            if length(obj.lssEventsToDo) == height(EL.ID)
-                fits = EL.openIntoUniqueEvents().computeDesignMatrix(obj.desMatTR) * betas;
-                % TODO: you forgot to convolve before you got the fits
+                tmp = obj.analyzeWithGivenHrfs(desMat, nuissancesData, fmriData);
+                out.betas.data(i, :) = tmp.betas.data(targetEventID, :);
             end
         end
 
-        function [bestHrfsIdx, highestRsqs] = performLibrary(obj, desMat, nuissancesData, fmriData)
-            % TODO: what if we have no nuissance data? would be
-            % incompatible with a size check
-
-            highestRsqs = zeros(1, fmriData.numVoxels);
-            bestHrfsIdx = nan(1, fmriData.numVoxels);
+        function [out] = analyzeWithLibrary(obj, desMat, nuissancesData, fmriData)
+            numReg = width(desMat);
+            out = obj.preallocateOutputStructure(numReg, fmriData.numTRs, ["Rsqs", "betas", "fits"]);
+            out.hrfsIdx = nan(1, fmriData.numVoxels);
+            
             for h = 1:width(obj.hrfsMatrix)
                 boldDesMat = fm_glm.conv(desMat, obj.hrfsMatrix(:,h));
-                if obj.downsampleDesMat
-                    boldDesMat = obj.downsampleDesMatToFmriResolution(boldDesMat);
+                if obj.bDownsampleDesMat
+                    boldDesMat = obj.bDownsampleDesMatToFmriResolution(boldDesMat);
                 end
-                [~, SSRegression] = obj.computeOLS([boldDesMat, nuissancesData.data], fmriData.data);
-                [~, SSNullModel]  = obj.computeOLS(nuissancesData.data, fmriData.data);
-                RSqs = 1 - (SSRegression ./ SSNullModel);
+                [currentBetas, SSRegression] ...
+                    = obj.computeOLS([boldDesMat, nuissancesData.data], fmriData.data);
+                [~,            SSNullModel ] ... 
+                    = obj.computeOLS(nuissancesData.data, fmriData.data);
+                currentRSqs = 1 - (SSRegression ./ SSNullModel);
 
-                betterFitVoxels = RSqs > highestRsqs;
-                highestRsqs(betterFitVoxels) = RSqs(betterFitVoxels);
-                bestHrfsIdx(betterFitVoxels) = h;
+                betterFitVoxels = currentRSqs > out.RSqs.data;
+                
+                out.hrfsIdx(betterFitVoxels)       = h;
+                out.RSqs.data(betterFitVoxels)     = currentRSqs(betterFitVoxels);
+                out.betas.data(:, betterFitVoxels) = currentBetas(1:numReg, betterFitVoxels);
+                if obj.saveFits
+                    out.fits.data(:, betterFitVoxels) = [boldDesMat, nuissancesData.data] * currentBetas(:, betterFitVoxels);
+                end
             end
         end
 
-        function [betas, fit, RSqs] = performGlmWithGivenHRFs(obj, desMat, nuissancesData, fmriData)
-            % For univariate analysis, we'll probably concatenate before we
-            % call this function.
+        function out = analyzeWithGivenHrfs(obj, desMat, nuissancesData, fmriData)
+            numReg = width(desMat);
+            out = obj.preallocateOutputStructure(numReg, fmriData.numTRs, ["fits", "tstats"]);
+
             betas = nan(width(desMat)+width(nuissancesData), fmriData.numVoxels);
             SSRegression = nan(1, fmriData.numVoxels);
             SSNullModel = nan(1, fmriData.numVoxels);
-            fit = nan(size(fmriData.data));
             degFreedom = fmriData.numTRs - rank(desMat);
 
             for h = unique(obj.hrfsIdx)
                 currVox = obj.hrfsIdx == h;
 
                 boldDesMat = fm_glm.conv(desMat, obj.hrfsMatrix(:,h));
-                if obj.downsampleDesMat
-                    boldDesMat = obj.downsampleDesMatToFmriResolution(boldDesMat);
+                if obj.bDownsampleDesMat
+                    boldDesMat = obj.bDownsampleDesMatToFmriResolution(boldDesMat);
                 end
 
                 X = [boldDesMat, nuissancesData.data];
@@ -159,54 +179,65 @@ classdef fm_glm < matlab.mixin.Copyable
                     nuissancesData.data,...
                     fmriData.data(:,currVox));
 
-                fit(:,currVox) = [boldDesMat, nuissancesData.data] * betas(:,currVox);
+                if obj.saveFits
+                    out.fits.data(:,currVox) = X * betas(:,currVox);
+                end
 
-
-                if obj.bTtestContrasts
-                    tstats(:,currVox) = obj.ttestCalculator(...
+                if obj.saveTstats
+                    out.tstats(:,currVox) = obj.ttestCalculator(...
                         X, betas(:,currVox), SSRegression(:,currVox), degFreedom);
                     % TODO: you're inverting X twice, one during regression
-                    % and one during analysis
+                    % and one during t-test
                 end
             end
-            
-            RSqs = 1 - (SSRegression ./ SSNullModel);
+
+            out.RSqs = 1 - (SSRegression ./ SSNullModel);
+            out.betas = fm_data(betas(1:width(desMat), :));
         end
 
-        function doHrfDerivative(obj, desMat, nuissancesData, fmriData)
+        function out = analyzeWithDerivatives(obj, desMat, nuissancesData, fmriData)
+            numReg = width(desMat);
+            out = obj.preallocateOutputStructure(numReg, fmriData.numTRs, ["tstats"]);
+
             boldDesMat = {};
             for h = width(obj.hrfsMatrix):-1:1
                 boldDesMat{h} = fm_glm.conv(desMat, obj.hrfsMatrix(:,h));
-                if obj.downsampleDesMat
-                    boldDesMat{h} = obj.downsampleDesMatToFmriResolution(boldDesMat{h});
+                if obj.bDownsampleDesMat
+                    boldDesMat{h} = obj.bDownsampleDesMatToFmriResolution(boldDesMat{h});
                 end
             end
             boldDesMat = cat(2, boldDesMat{:});
 
-            [betas, SSRegression] = obj.computeOLS(...
+            [out.betas, SSRegression] = obj.computeOLS(...
                     [boldDesMat, nuissancesData.data],...
                     fmriData.data);
             [~,      SSNullModel] = obj.computeOLS(...
                     nuissancesData.data,...
                     fmriData.data);
 
-            RSqs = 1 - (SSRegression ./ SSNullModel);
-            fit = [boldDesMat, nuissancesData.data] * betas;
+            out.RSqs = 1 - (SSRegression ./ SSNullModel);
+            if obj.saveFits
+                out.fits = fm_data([boldDesMat, nuissancesData.data] * out.betas);
+            end
 
-
-            numRegressors = width(desMat);
-            biasCorrectedBetas = nan(numRegressors, fmriData.numVoxels);
-            for b = 1:numRegressors
-                biasCorrectedBetas(b,:) = ...
-                    sign(betas(b,:)) .* ...
-                    sqrt(sum(betas(b:numRegressors:width(boldDesMat), :).^2, 1));
+            
+            out.biasCorrectedBetas = fm_data(nan(numReg, fmriData.numVoxels));
+            for b = 1:numReg
+                out.biasCorrectedBetas.data(b,:) = ...
+                    sign(out.betas(b,:)) .* ...
+                    sqrt(sum(out.betas(b:numReg:width(boldDesMat), :).^2, 1));
                     % Lindquist et al. (2008), "Modeling the hemodynamic..."
             end
 
-            if obj.bTtestContrasts
-                tstats = obj.ttestCalculatorForDerivative(...
-                    biasCorrectedBetas, SSRegression, fmriData.numTRs);
+            if obj.saveTstats
+                out.tstats = fm_data( ...
+                    obj.ttestCalculatorForDerivative(biasCorrectedBetas,...
+                                                     SSRegression,...
+                                                     fmriData.numTRs) ...
+                                     );
             end
+
+            out.betas = fm_data(out.betas(1:width(boldDesMat), :));
         end
     end
 
@@ -221,98 +252,156 @@ classdef fm_glm < matlab.mixin.Copyable
     end
 
     methods (Access = private)
-        function runPreparations(obj)
+        function checkProperties(obj)
             assert(~isempty(obj.fmriData), "fmriData property is empty");
             assert(~isempty(obj.eventList), "eventList (design matrix) propety is empty");
+
+            checkFrameworkAndHrfAreCompatible();
 
             obj.dataTR = obj.fmriData.TR;
             obj.numRuns = length(obj.fmriData);
             obj.numRegressors = max(obj.eventList.cat().ID);
 
+            obj.hrfsMatrix                               = getHrfs(obj.dataTR);
+            obj.hrfsIdx                                  = getHrfsIdx(obj.hrfsMatrix);
+            obj.lssEventsToDo                            = getLssEventsToDo(obj.lssEventsToDo);
+            [obj.desMatTR, obj.bDownsampleDesMat]        = calculateDesMatResolution();
+            obj.nuissancesData                           = getNuissances();
 
-            timeInfo = cat(1, obj.eventList.Duration, obj.eventList.Onset, obj.dataTR);
-            timeInfo = unique(timeInfo);
-
-            multFactor = 4;
-            decimallessTimeInfo = timeInfo * 10^(multFactor);
-            assert(isRound(decimallessTimeInfo),...
-                "The temporal resolution of the design matrix is too fine.");
+            validateTtestContrasts(obj.numRegressors);
             
-            obj.desMatTR = gcdOfMany(decimallessTimeInfo) / 10^(multFactor);
-            obj.downsampleDesMat = obj.desMatTR ~= obj.dataTR;
-
-
-            TR = obj.dataTR;
-            switch lower(obj.hrf)
-                case 'nsd+canonical'
-                    obj.hrfsMatrix = [fm_hrf.getAllNsdHrfs(TR), fm_hrf.getCanonicalHrf(TR)];
-                case 'nsd'
-                    obj.hrfsMatrix = fm_hrf.getAllNsdHrfs(TR);
-                case 'canonical'
-                    obj.hrfsMatrix = fm_hrf.getCanonicalHrf(TR);
-                    obj.hrfsIdx = ones(1, obj.fmriData(1).numVoxels);
-                        % TODO: do any other HRF methods need this?
-                case 'derivative-1'
-                    obj.hrfsMatrix = fm_hrf.getDerivativeHrfs(TR, 1);
-                case 'derivative-2'
-                    obj.hrfsMatrix = fm_hrf.getDerivativeHrfs(TR, 2);
-                case 'custom'
-                otherwise
-                    error("Provided hrf parameter %s is invalid", obj.hrf);
+                        
+            %%%
+            function checkFrameworkAndHrfAreCompatible()
+                if lower(obj.framework) == "lss"
+                    assert(~contains(obj.hrf, 'derivative'),...
+                           "LSS cannot be implemented with HRF derivative");
+                end
             end
 
+            function hrfsMatrix = getHrfs(TR)
+                switch lower(obj.hrf)
+                    case 'nsd+canonical'
+                        hrfsMatrix = [fm_hrf.getAllNsdHrfs(TR), fm_hrf.getCanonicalHrf(TR)];
+                    case 'nsd'
+                        hrfsMatrix = fm_hrf.getAllNsdHrfs(TR);
+                    case 'canonical'
+                        hrfsMatrix = fm_hrf.getCanonicalHrf(TR);
+                    case 'derivative-1'
+                        hrfsMatrix = fm_hrf.getDerivativeHrfs(TR, 1);
+                    case 'derivative-2'
+                        hrfsMatrix = fm_hrf.getDerivativeHrfs(TR, 2);
+                    case 'custom'
+                    otherwise
+                        error("'%s' for property hrf is invalid", obj.hrf);
+                end
+            end
 
-            if ~isempty(obj.ttestContrasts)
-                assert(width(obj.ttestContrasts) == obj.numRegressors,...
+            function hrfsIdx = getHrfsIdx(hrfsMatrix)
+                hrfsIdx = obj.hrfsIdx;
+                if lower(obj.framework) == "findbesthrfs"
+                    assert(isempty(obj.hrfsIdx), "hrfsIdx must be empty when framework is 'findBestHrfs'");
+                elseif contains(obj.hrf, 'derivative')
+                    assert(isempty(obj.hrfsIdx), "hrfsIdx must be empty when the hrf method is 'derivative'");
+                elseif width(hrfsMatrix) == 1
+                    hrfsIdx = ones(1, obj.fmriData(1).numVoxels);
+                else
+                    assert(~isempty(obj.hrfsIdx), "When the basis set has more than one HRF, " + ...
+                                                  "hrfsIdx must be provided");
+                end
+            end
+
+            function lssEventsToDo = getLssEventsToDo(lssEventsToDo)
+                if lower(obj.framework) ~= "lss"
+                    return;
+                end
+
+                if isempty(lssEventsToDo)
+                    for i = length(obj.eventList):-1:1
+                        lssEventsToDo{i}(:,1) = 1:height(obj.eventList(i));
+                    end
+                    return;
+                end
+    
+                if length(obj.eventList) > 1
+                    assert(iscell(lssEventsToDo), ...
+                           "For multiple runs, eventList must be a cell array");
+                    assert(length(obj.eventList) == length(lssEventsToDo),...
+                           "Number of cells in 'lssEventsToDo' must match the number of runs");
+                elseif ~iscell(lssEventsToDo)
+                    lssEventsToDo = {lssEventsToDo};
+                end
+    
+                for i = length(lssEventsToDo):-1:1
+                    assert(width(lssEventsToDo{i}) == 1, "Input should be a column vector");
+                    assert(max(lssEventsToDo{i}) <= height(obj.eventList(i)) & ...
+                           min(lssEventsToDo{i}) >= 1 & ...
+                           isRound(lssEventsToDo{i}), ...
+                           "Input should contain indices of events in eventList " + ...
+                           "that are of interest");
+                end
+            end
+
+            function [desMatTR, bDownsampleDesMat] = calculateDesMatResolution()
+                timeInfo = cat(1, obj.eventList.Duration, obj.eventList.Onset, obj.dataTR);
+                timeInfo = unique(timeInfo);
+    
+                multFactor = 4;
+                decimallessTimeInfo = timeInfo * 10^(multFactor);
+                assert(isRound(decimallessTimeInfo),...
+                    "The temporal resolution of the design matrix is too fine.");
+                
+                desMatTR = gcdOfMany(decimallessTimeInfo) / 10^(multFactor);
+                bDownsampleDesMat = obj.desMatTR ~= obj.dataTR;
+            end
+
+            function validateTtestContrasts(numRegressors)
+                if isempty(obj.ttestContrasts), return; end
+                assert(width(obj.ttestContrasts) == numRegressors,...
                        "Number of columns in contrasts matrix should be equal " + ...
                        "to the number of event types. Do not include nuissances.");
             end
-            
 
-
-            if isempty(obj.hrfsIdx)
-                obj.hrfsIdx = 1:width(obj.hrfsMatrix);
-            end
-
-
-
-            if strcmpi(obj.nuissances, 'baselines')
-                obj.nuissancesData = obj.getBaselineNuissances([obj.fmriData.numTRs]);
-            end
-
-
-            %{
-            if isempty(obj.lssEventsToDo)
-                for i = length(obj.eventList):-1:1
-                    obj.lssEventsToDo{i} = 1:height(obj.eventList);
+            function nuissancesData = getNuissances()
+                if strcmpi(obj.nuissances, 'baselines')
+                    nuissancesData = obj.getBaselineNuissances([obj.fmriData.numTRs]);
+                else
+                    assert(~isempty(obj.nuissancesData) && ~isempty(obj.nuissancesData.data),...
+                           "'nuissancesData' cannot be empty unless 'nuissances' is 'baseline'");
+                    for i = 1:obj.numRuns
+                        assert(obj.nuissancesData(i).numTRs == obj.fmriData(i).numTRs,...
+                               "Number of TRs in nuissancesData does not match the fMRI data");
+                    end
+                    nuissancesData = obj.nuissancesData;
                 end
-                % return; % return when this is in a function
             end
 
-            if length(obj.eventList) > 1
-                assert(iscell(obj.lssEventsToDo), ...
-                       "For multiple runs, eventList must be a cell array");
-            elseif ~iscell(obj.lssEventsToDo)
-                obj.lssEventsToDo = {obj.lssEventsToDo};
+        end
+
+        function out = preallocateOutputStructure(obj, numReg, numTRs, neededFields)
+            numVoxels = obj.fmriData.getNumVoxels();
+
+            if any(strcmpi(neededFields, "RSqs"))
+                out.RSqs = fm_data(zeros(1, numVoxels));
             end
 
-            for i = length(obj.lssEventsToDo):-1:1
-                assert(width(obj.lssEventsToDo) == 1, "Input should be a column vector");
-                assert(max(obj.lssEventsToDo) <= height(obj.eventList{i}) & ...
-                       min(obj.lssEventsToDo) >= 1 & ...
-                       isRound(obj.lssEventsToDo), ...
-                       "Input should contain indices of events in eventList " + ...
-                       "that are of interest");
+            if any(strcmpi(neededFields, "betas"))
+                out.betas = fm_data(nan(numReg, numVoxels));
             end
-            %}
 
-
-
-
-
-            % TODO: check that all parameter inputs are compatible
-                % ideally, setup properties such that incompatible
-                % parameters are not possible to specify
+            if any(strcmpi(neededFields, "fits"))
+                out.fits = fm_data.empty(1,0);
+                if obj.saveFits
+                    out.fits = fm_data(nan(numTRs, numVoxels));
+                end
+            end
+            
+            if any(strcmpi(neededFields, "tstats"))
+                out.tstats = fm_data.empty(1,0);
+                if obj.saveTstats
+                    out.tstats = fm_data(nan(height(obj.ttestContrasts), numVoxels));
+                end
+            end
         end
 
         function data = downsampleDesMatToFmriResolution(obj, data)
@@ -340,7 +429,6 @@ classdef fm_glm < matlab.mixin.Copyable
             end
             % Calhoun et al. (2003), "fMRI analysis with the general linear model..."
         end
-
     end
 
     methods (Static = true)
