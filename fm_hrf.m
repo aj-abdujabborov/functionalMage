@@ -5,7 +5,7 @@ classdef fm_hrf
 
     methods (Static = true)
         function basisData = getAllNsdHrfs(TR)
-            obj.checkTRValidity(TR);
+            fm_hrf.checkTRValidity(TR);
 
             load('NaturalScenesDatasetHRFs.mat', 'params');
             for i = 20:-1:1
@@ -15,7 +15,7 @@ classdef fm_hrf
         end
 
         function basisData = getNsdHrf(TR)
-            obj.checkTRValidity(TR);
+            fm_hrf.checkTRValidity(TR);
 
             load('NaturalScenesDatasetHRFs.mat', 'params');
             basisData = simtb_spm_hrf(TR, params(randi(20),:));
@@ -23,14 +23,14 @@ classdef fm_hrf
         end
 
         function basisData = getCanonicalHrf(TR)
-            obj.checkTRValidity(TR);
+            fm_hrf.checkTRValidity(TR);
 
             basisData = simtb_spm_hrf(TR, fm_hrf.canonicalParams);
             basisData = basisData ./ max(basisData);
         end
 
         function basisData = getSimTbHrf(TR)
-            obj.checkTRValidity(TR);
+            fm_hrf.checkTRValidity(TR);
 
             % Code from SimTB package for MATLAB
             % https://pubmed.ncbi.nlm.nih.gov/22178299/

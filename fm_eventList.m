@@ -53,11 +53,7 @@ classdef fm_eventList
             arguments
                 eventList;
                 TR (1,1) {mustBePositive};
-                nColumns (1,1) {mustBePositive};
-            end
-
-            if ~(exist('nColumns', 'var') && ~isempty(nColumns))
-                nColumns = max(eventList.ID);
+                nColumns (1,1) {mustBePositive} = max(eventList.ID);
             end
 
             allTimings = [eventList.Onset; eventList.Duration];
