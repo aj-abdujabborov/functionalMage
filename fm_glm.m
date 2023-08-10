@@ -104,6 +104,34 @@ classdef fm_glm < matlab.mixin.Copyable
             end
         end
 
+        function betas = getGroundTruthInBetasForm(obj, patternPerEvent)
+            arguments
+                obj;
+                patternPerEvent (1,:) fm_data;
+            end
+
+            obj.checkProperties();
+            assert(lower(obj.framework) ~= "findbesthrfs",...
+                  "getGroundTruthInBetasForm only works with 'LSS' and 'OLS' frameworks");
+
+            if lower(obj.framework) == "lss"
+                betas = patternPerEvent;
+                return;
+            end
+            
+            EL = obj.eventList;
+            for i = obj.numRuns:-1:1
+                numEvs = height(EL(i));
+                numRegIDs = max(EL(i).ID);
+
+                idx = sub2ind([numEvs, numRegIDs], 1:numEvs, EL(i).ID(:).');
+                X = zeros(numEvs, numRegIDs);
+                X(idx) = 1;
+
+                betas(i) = fm_data(obj.computeOLS(X, patternPerEvent(i).data));
+            end
+        end
+
         function out = performLSS(obj, EL, nuissancesData, fmriData, lssEventsToDo)
             obj.saveFits = false;
             obj.saveTstats = false;

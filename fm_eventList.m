@@ -1,7 +1,7 @@
 classdef fm_eventList
     properties (Dependent = true)
         ID {mustBePositive, mustBeInteger};
-        Activity {mustBePositive};
+        Activity {mustBeFinite};
         Duration {mustBeNonnegative};
         Onset {mustBeNonnegative};
         content (:,4) table;
