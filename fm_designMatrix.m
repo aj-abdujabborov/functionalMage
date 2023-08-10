@@ -9,12 +9,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         idVectors;
         timings;
 
-        doNotClassifyGroupIDs = [0]; 
-    end
-
-    properties (Dependent = true, SetAccess = private)
-        glmLSA;
-        mvpaLSA;
+        doNotClassifyGroupIDs = [0];
     end
 
     properties (Access = private)
@@ -29,7 +24,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
 
         numRuns;
 
-        privateLsa = [];
+        lsa (1,:) struct = fm_designMatrix.getGlmInfoStruct();
     end
 
     methods
@@ -88,62 +83,63 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         end        
     end
 
-    methods % Get methods
-        function glmLSA = get.glmLSA(obj)
-            if isempty(obj.privateLsa)
-                for i = obj.numRuns:-1:1
-                    obj.privateLsa.unqID2AnalysisID{i} = obj.AnalysisIDs(obj.unqIDEventList(i).ID);
-                    
-                    obj.privateLsa.unqID2RegressionID{i} = nan(size(obj.unqIDEventList(i).ID));
-                    assignID = 1;
-                    runwiseEventIdx = obj.privateLsa.unqID2AnalysisID{i} == obj.runwiseAnalysisIDs;
-                    for j = 1:length(obj.runwiseAnalysisIDs)
-                        obj.privateLsa.unqID2RegressionID{i}(runwiseEventIdx(:,j)) = assignID;
-                        assignID = assignID + 1;
-                    end
-
-                    nonRunwiseEventIdx = ~any(runwiseEventIdx, 2);
-                    obj.privateLsa.unqID2RegressionID{i}(nonRunwiseEventIdx) ...
-                        = assignID : (assignID + sum(nonRunwiseEventIdx) - 1);
-
-
-                    obj.privateLsa.regressionEventList(i) = ...
-                        obj.unqIDEventList(i);
-                    obj.privateLsa.regressionEventList(i).ID = ...
-                        obj.privateLsa.unqID2RegressionID{i};
-                end
+    methods
+        function glmLSA = getGlmLSA(obj)
+            if ~obj.isFieldClear(obj.lsa, 'regEventList')
+                glmLSA = [obj.lsa.regEventList];
+                return;
             end
 
-            glmLSA = obj.privateLsa.regressionEventList;
+            for i = obj.numRuns:-1:1
+                obj.lsa(i).eventNoIntoAnalysisID = obj.AnalysisIDs(obj.unqIDEventList(i).ID);
+                
+                obj.lsa(i).eventNoIntoRegID = nan(size(obj.unqIDEventList(i).ID));
+                assignID = 1;
+                runwiseEventIdx = obj.lsa(i).eventNoIntoAnalysisID == obj.runwiseAnalysisIDs;
+                for j = 1:length(obj.runwiseAnalysisIDs)
+                    obj.lsa(i).eventNoIntoRegID(runwiseEventIdx(:,j)) = assignID;
+                    assignID = assignID + 1;
+                end
+
+                nonRunwiseEventIdx = ~any(runwiseEventIdx, 2);
+                obj.lsa(i).eventNoIntoRegID(nonRunwiseEventIdx) ...
+                    = assignID : (assignID + sum(nonRunwiseEventIdx) - 1);
+
+                obj.lsa(i).regEventList = ...
+                    obj.unqIDEventList(i);
+                obj.lsa(i).regEventList.ID = ...
+                    obj.lsa(i).eventNoIntoRegID;
+            end
+
+            glmLSA = [obj.lsa.regEventList];
         end
 
-        function mvpaLSA = get.mvpaLSA(obj)
-            if obj.isFieldClear(obj.privateLsa, 'regressionEventList')
-                obj.glmLSA();
+        function mvpaLSA = getMvpaLSA(obj)
+            if obj.isFieldClear(obj.lsa, 'regEventList')
+                obj.getGlmLSA();
             end
-            PL = obj.privateLsa;
 
-            if obj.isFieldClear(PL, 'regressionID2AnalysisID')
+            if obj.isFieldClear(obj.lsa, 'regIDIntoAnalysisID')
                 for i = obj.numRuns:-1:1 
-                    PL.regressionID2AnalysisID{i} = getRegressionID2AnalysisID(...
-                        PL.unqID2RegressionID{i},...
-                        PL.unqID2AnalysisID{i});
+                    obj.lsa(i).regIDIntoAnalysisID = getRegIDIntoAnalysisID(...
+                        obj.lsa(i).eventNoIntoRegID,...
+                        obj.lsa(i).eventNoIntoAnalysisID);
 
-                    PL.regressionID2ClassifLabel{i} = getRegressionID2ClassifLabel(...
-                        PL.regressionID2AnalysisID{i});
+                    obj.lsa(i).regIDIntoClassifGroup = getRegIDIntoClassifGroup(...
+                        obj.lsa(i).regIDIntoAnalysisID);
+                    nonClaIdx = ismember(obj.lsa(i).regIDIntoClassifGroup,...
+                                         obj.doNotClassifyGroupIDs);
 
-                    PL.regressionID2ClassifGroup{i} = getRegressionID2ClassifGroup(...
-                        PL.regressionID2AnalysisID{i});
+                    obj.lsa(i).regIDIntoClassifLabel = getRegIDIntoClassifLabel(...
+                        obj.lsa(i).regIDIntoAnalysisID);
+                    obj.lsa(i).regIDIntoClassifLabel(nonClaIdx) = nan;
                 end
             end
 
-            obj.privateLsa = PL;
+            mvpaLSA = struct('Labels', {obj.lsa.regIDIntoClassifLabel}, ...
+                             'Groups', {obj.lsa.regIDIntoClassifGroup});
 
-            mvpaLSA = [];
-            mvpaLSA.Labels = PL.regressionID2ClassifLabel;
-            mvpaLSA.Groups = PL.regressionID2ClassifGroup;
-
-            function reg2analysis = getRegressionID2AnalysisID(regressionID, analysisID)
+            function reg2analysis = getRegIDIntoAnalysisID(regressionID, analysisID)
                 unqRegIDs = unique(regressionID(:)');
                 for unqID = unqRegIDs(end:-1:1)
                     tmp = analysisID(regressionID == unqID);
@@ -152,15 +148,11 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                 reg2analysis = reg2analysis(:);
             end
 
-            function classifLabels = getRegressionID2ClassifLabel(analysisID)
-                nonClassif = ismember(obj.ClassificationGroups, obj.doNotClassifyGroupIDs);
-                old = obj.AnalysisIDs;      old(nonClassif) = 0;
-                new = obj.NeuralPatternIDs; new(nonClassif) = 0;
-                classifLabels = obj.replaceValues(analysisID, old, new);
-                % CHECK REPLACEVALUES FUNCTION
+            function classifLabels = getRegIDIntoClassifLabel(analysisID)
+                classifLabels = obj.replaceValues(analysisID, obj.AnalysisIDs, obj.NeuralPatternIDs);
             end
 
-            function classifGroups = getRegressionID2ClassifGroup(analysisID)
+            function classifGroups = getRegIDIntoClassifGroup(analysisID)
                 classifGroups = obj.replaceValues(analysisID, obj.AnalysisIDs, obj.ClassificationGroups);
             end
         end
@@ -174,20 +166,29 @@ classdef fm_designMatrix < matlab.mixin.Copyable
     end
 
     methods (Access = private, Static = true)
-        function bEmpty = isFieldClear(structVar, fieldname)
-            bEmpty = isempty(structVar) || ~isfield(structVar, fieldname) || isempty(structVar.(fieldname));
+        function bEmpty = isFieldClear(structIn, fieldname)
+            bEmpty = isempty(structIn) || ~isfield(structIn, fieldname) || isempty(structIn(1).(fieldname));
         end
 
         function replaced = replaceValues(data, A, B)
             assert(isequal(size(A), size(B)), "The two vectors must be equal sizes");
             
-            replaced = data;
+            replaced = nan(size(data));
             unqA = unique(A);
             for currUnqA = unqA(:).'
                 correspondingB = unique(B(A == currUnqA));
                 assert(numel(correspondingB) <= 1, "All elements of the same value in vecA must map onto elments of the same value in vecB");
                 replaced(data == currUnqA) = correspondingB;
             end
+        end
+
+        function outStruct = getGlmInfoStruct()
+            outStruct = struct('eventNoIntoAnalysisID', [], ...
+                               'eventNoIntoRegID',      [], ...
+                               'regEventList',          fm_eventList.empty, ...
+                               'regIDIntoAnalysisID',   [], ...
+                               'regIDIntoClassifLabel', [], ...
+                               'regIDIntoClassifGroup', []);
         end
 
         %%% destined to trash
