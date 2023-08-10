@@ -116,12 +116,22 @@ classdef fm_data < matlab.mixin.Copyable
         end
 
         function dataCombined = plus(inObj1, inObj2)
-            dataCombined = cat([inObj1, inObj2]);
+            dataCombined = combineCompatibleParameters([inObj1, inObj2]);
+            assert(inObj1.numRows == inObj2.numRows,...
+                   "Number of rows / TRs in fm_data objects do not match");
+            dataCombined.data = inObj1.data + inObj2.data;
+            if isequal(inObj1.IDs, inObj2.IDs)
+                dataCombined.IDs = inObj1.IDs;
+            end
         end
     end
 
     methods (Access = private)
         function dataCombined = combineCompatibleParameters(objVector)
+            if isempty(objVector)
+                error("fm_data vector is empty");
+            end
+
             uniqueTR = unique([objVector.TR]);
             assert(length(uniqueTR) <= 1, "All TRs must be the same.");
             assert(has1UniqueValue([objVector.numVoxels]), "Number of voxels must be the same for all elements.");

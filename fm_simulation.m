@@ -1,19 +1,19 @@
 
 classdef fm_simulation < matlab.mixin.Copyable
     properties
-        eventList;
-        simProperties;
+        eventList fm_eventList;
+        simProperties fm_simulationProperties;
 
-        neuralPatterns;
-        HRFs;
+        neuralPatterns (:,:) {mustBeFinite};
+        HRFs (:,:) {mustBeFinite};
 
-        neuralPatternPerEvent;
-        neuralFluctuationPerEvent;
-        totalNeuralActivityPerEvent;
+        neuralPatternPerEvent (1,:) fm_data;
+        neuralFluctuationPerEvent (1,:) fm_data;
+        totalNeuralActivityPerEvent (1,:) fm_data;
 
-        neuralTimeSeries;
-        noNoiseBoldTimeSeries;
-        boldTimeSeries = fm_data.empty();
+        neuralTimeSeries (1,:) fm_data;
+        noNoiseBoldTimeSeries (1,:) fm_data;
+        boldTimeSeries (1,:) fm_data;
     end
  
     methods
@@ -27,7 +27,9 @@ classdef fm_simulation < matlab.mixin.Copyable
 
         %%%
         function generate(obj)
-            % TODO: verify eventList and simProperties are set
+            assert(~isempty(obj.eventList), "Set eventList property");
+            assert(~isempty(obj.simProperties), "Set simProperties property");
+
             obj.neuralPatterns = obj.generateNeuralPatterns();
             if isempty(obj.simProperties.hrfSet)
                 obj.HRFs = obj.generateHRFs();
@@ -36,16 +38,15 @@ classdef fm_simulation < matlab.mixin.Copyable
             end
 
             for i = obj.simProperties.numRuns:-1:1
-                obj.neuralPatternPerEvent{i}       = obj.computeNeuralPatternPerEvent(obj.eventList(i), obj.neuralPatterns);
-                obj.neuralFluctuationPerEvent{i}   = obj.generateNeuralFluctuationPerEvent(obj.eventList(i));
-                obj.totalNeuralActivityPerEvent{i} = obj.neuralPatternPerEvent{i} + obj.neuralFluctuationPerEvent{i};
-                obj.neuralTimeSeries{i}            = obj.computeNeuralTimeSeries(obj.eventList(i), obj.totalNeuralActivityPerEvent{i});
+                obj.neuralPatternPerEvent(i)       = obj.computeNeuralPatternPerEvent(obj.eventList(i), obj.neuralPatterns);
+                obj.neuralFluctuationPerEvent(i)   = obj.generateNeuralFluctuationPerEvent(obj.eventList(i));
+                obj.totalNeuralActivityPerEvent(i) = obj.neuralPatternPerEvent(i) + obj.neuralFluctuationPerEvent(i);
+                obj.neuralTimeSeries(i)            = obj.computeNeuralTimeSeries(obj.eventList(i), obj.totalNeuralActivityPerEvent(i));
 
-                obj.noNoiseBoldTimeSeries{i} = obj.convolveWithHRFs(obj.neuralTimeSeries{i}, obj.HRFs);
+                obj.noNoiseBoldTimeSeries(i) = obj.convolveWithHRFs(obj.neuralTimeSeries(i), obj.HRFs);
                 
-                obj.boldTimeSeries(i) = fm_data(...
-                    obj.noNoiseBoldTimeSeries{i} + obj.generateNoise(),...
-                    obj.simProperties.TR);
+                obj.boldTimeSeries(i) = obj.noNoiseBoldTimeSeries(i) + obj.generateNoise();
+                obj.boldTimeSeries(i).TR = obj.simProperties.TR;
             end
         end
 
@@ -58,30 +59,38 @@ classdef fm_simulation < matlab.mixin.Copyable
         %%%
         function neuralPatternPerEvent = computeNeuralPatternPerEvent(~, eventList, neuralPatterns)
             neuralPatternPerEvent = neuralPatterns(eventList.ID, :);
-            neuralPatternPerEvent = neuralPatternPerEvent .* eventList.Activity;
+            neuralPatternPerEvent = fm_data(neuralPatternPerEvent .* eventList.Activity);
         end
 
         %%%
         function neuralFluctuationPerEvent = generateNeuralFluctuationPerEvent(obj, eventList)
+            if obj.simProperties.neuralFluctuationAmount == 0
+                neuralFluctuationPerEvent = fm_data(zeros(height(eventList), obj.simProperties.numVoxels));
+                return;
+            end
+            
             noiseScale = eventList.Activity * obj.simProperties.neuralFluctuationAmount;
             neuralFluctuationPerEvent = rand(height(eventList), obj.simProperties.numVoxels) - 0.5;
             neuralFluctuationPerEvent = neuralFluctuationPerEvent .* noiseScale;
-            neuralFluctuationPerEvent = makecorrelated(...
-                neuralFluctuationPerEvent,...
-                obj.simProperties.neuralFluctuationCoherence);
+            neuralFluctuationPerEvent = fm_data( ...
+                    makecorrelated(...
+                        neuralFluctuationPerEvent,...
+                        obj.simProperties.neuralFluctuationCoherence) ...
+                        );
         end
 
         %%%
         function neuralTimeSeries = computeNeuralTimeSeries(obj, eventList, eventPatterns)
-            eventList.ID = (1:height(eventList))';
-            timePointsOfEachEvent = eventList.computeDesignMatrix(...
-                                        obj.simProperties.TR);
+            timePointsOfEachEvent = eventList.openIntoUniqueEvents().computeDesignMatrix(obj.simProperties.TR);
             
-            neuralTimeSeries = zeros(obj.simProperties.numTRs, obj.simProperties.numVoxels);
+            neuralTimeSeries = fm_data(...
+                zeros(obj.simProperties.numTRs, obj.simProperties.numVoxels),...
+                obj.simProperties.TR);
+
             for ev = 1:height(eventList)
                 thisEventTimePoints = logical(timePointsOfEachEvent(:,ev));
-                neuralTimeSeries(thisEventTimePoints, :) = ...
-                    repmat(eventPatterns(ev,:), sum(thisEventTimePoints), 1);
+                neuralTimeSeries.data(thisEventTimePoints, :) = ...
+                    repmat(eventPatterns.data(ev,:), sum(thisEventTimePoints), 1);
             end
         end
 
@@ -100,8 +109,9 @@ classdef fm_simulation < matlab.mixin.Copyable
         end
 
         %%%
-        function noNoiseBoldTimeSeries = convolveWithHRFs(~, timeSeries, HRFs)
-            noNoiseBoldTimeSeries = convolveByColumn(timeSeries, HRFs);
+        function convTimeSeries = convolveWithHRFs(~, timeSeries, HRFs)
+            convTimeSeries = fm_data(convolveByColumn(timeSeries.data, HRFs));
+            convTimeSeries.TR = timeSeries.TR;
         end
 
         %%%

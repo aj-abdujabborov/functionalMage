@@ -58,7 +58,7 @@ classdef fm_noiseMachine < handle
                 outNoise(:,:,i) = obj.generatorHandles{noiseSourceIdx(i)}(obj.numTRs, obj.numVoxels, obj.TR);
             end
             outNoise = outNoise .* moveTo3rdDimension(noiseProportions(noiseSourceIdx));
-            outNoise = sum(outNoise, 3) * obj.goalNoiseSD;
+            outNoise = fm_data(sum(outNoise, 3) * obj.goalNoiseSD);
 
             function out = moveTo3rdDimension(in)
                 out = permute(in(:), [2 3 1]);
