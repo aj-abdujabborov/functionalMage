@@ -1,30 +1,45 @@
 % TODO: add storage of timing and add capabiilty to update the timings
 
 classdef fm_designMatrix < matlab.mixin.Copyable
+    properties (Dependent = true)
+        taskTable {mustBeA(taskTable, 'fm_taskTable')};
+        simProperties {mustBeA(simProperties, 'fm_simulationProperties')};
+    end
+
     properties
-        runwiseAnalysisIDs;
-
-        neuralPatternIDEventList = fm_eventList.empty;
-
-        idVectors;
+        runwiseAnalysisIDs (1,:) {mustBeInteger} = [];
         timings;
+    end
 
+    properties (Hidden = true)
         doNotClassifyGroupIDs = [0];
     end
 
     properties (Access = private)
-        unqIDEventList = fm_eventList.empty;
-        trialSequence;
+        privateSimProperties;
+        privateTaskTable;
 
+        % 1D identifier vectors
         NeuralIntensity;
         NeuralPatternIDs; numNeuralPatterns;
         AnalysisIDs;
         ClassificationGroups;
         EventIDs;
 
+        unqIDEventList = fm_eventList.empty;
+        idLessEventList = fm_eventList.empty;
+        trialSequence;
+
+        eventNoIntoAnalysisID;
+        eventNoIntoRegID;
+        regIDIntoAnalysisID;
+        regIDIntoClassifLabel;
+        regIDIntoClassifGroup;
+
+        lastMethod string {matlab.system.mustBeMember(lastMethod, {'lsa', 'lss2', 'lss1', 'lsu', ''})} = "";
         numRuns;
 
-        lsa (1,:) struct = fm_designMatrix.getGlmInfoStruct();
+        bEventListGenerated = false;
     end
 
     methods
@@ -33,141 +48,220 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             if nargin == 0
                 return;
             end
-
-            % TODO: check that inputs are of correct classes.
-            extractMappingVectors();
-            obj.NeuralIntensity = collapseCellArray(taskTable.contentNumerical.NeuralIntensity);
-            obj.numNeuralPatterns = numUniqueElements(obj.NeuralPatternIDs);
-            obj.timings = taskTable.content(:, ["Durations", "Onsets"]);
-            obj.numRuns = simProperties.numRuns;
-
-            for i = obj.numRuns:-1:1
-                [obj.unqIDEventList(i), obj.trialSequence{i}] ...
-                    = generateEventList(taskTable, simProperties);
-
-                obj.neuralPatternIDEventList(i) = obj.unqIDEventList(i);
-                obj.neuralPatternIDEventList(i).Activity = obj.NeuralIntensity(obj.neuralPatternIDEventList(i).ID);
-                obj.neuralPatternIDEventList(i).ID = obj.NeuralPatternIDs(obj.neuralPatternIDEventList(i).ID);
+            if nargin >= 1
+                obj.taskTable = taskTable;
             end
-
-            function extractMappingVectors()
-                obj.NeuralPatternIDs = collapseCellArray(taskTable.contentNumerical.NeuralPatternIDs);
-                obj.AnalysisIDs = collapseCellArray(taskTable.contentNumerical.AnalysisIDs);
-                obj.ClassificationGroups = collapseCellArray(taskTable.contentNumerical.ClassificationGroups);
-                obj.EventIDs = collapseCellArray(taskTable.contentNumerical.EventIDs);
+            if nargin >= 2
+                obj.simProperties = simProperties;
             end
-            
-            function [eventList, trialSequence] = generateEventList(taskTable, simProperties)
-                [eventList, trialSequence] = makefmriseq(...
-                    taskTable.contentNumerical.Durations(:)',...
-                    taskTable.contentNumerical.EventIDs(:)',...
-                    taskTable.contentNumerical.Probability(:)',...
-                    simProperties.runDuration,...
-                    1,...
-                    simProperties.itiModel,...
-                    simProperties.itiParams,...
-                    simProperties.TR,...
-                    'addExtraTrials', 0);
-                eventList = fm_eventList(eventList{1}, simProperties.runDuration);
-                trialSequence = trialSequence{1};
-            end
-
-            function collapsed = collapseCellArray(cellArray)
-                collapsed = [cellArray{:}];
-                collapsed = collapsed(:);
-            end
-
-            function numElements = numUniqueElements(vector)
-                numElements = length(unique(vector));
-            end
-        end        
-    end
-
-    methods
-        function glmLSA = getGlmLSA(obj)
-            if ~obj.isFieldClear(obj.lsa, 'regEventList')
-                glmLSA = [obj.lsa.regEventList];
-                return;
-            end
-
-            for i = obj.numRuns:-1:1
-                obj.lsa(i).eventNoIntoAnalysisID = obj.AnalysisIDs(obj.unqIDEventList(i).ID);
-                
-                obj.lsa(i).eventNoIntoRegID = nan(size(obj.unqIDEventList(i).ID));
-                assignID = 1;
-                runwiseEventIdx = obj.lsa(i).eventNoIntoAnalysisID == obj.runwiseAnalysisIDs;
-                for j = 1:length(obj.runwiseAnalysisIDs)
-                    obj.lsa(i).eventNoIntoRegID(runwiseEventIdx(:,j)) = assignID;
-                    assignID = assignID + 1;
-                end
-
-                nonRunwiseEventIdx = ~any(runwiseEventIdx, 2);
-                obj.lsa(i).eventNoIntoRegID(nonRunwiseEventIdx) ...
-                    = assignID : (assignID + sum(nonRunwiseEventIdx) - 1);
-
-                obj.lsa(i).regEventList = ...
-                    obj.unqIDEventList(i);
-                obj.lsa(i).regEventList.ID = ...
-                    obj.lsa(i).eventNoIntoRegID;
-            end
-
-            glmLSA = [obj.lsa.regEventList];
         end
 
-        function mvpaLSA = getMvpaLSA(obj)
-            if obj.isFieldClear(obj.lsa, 'regEventList')
+        %%%
+        function regenerateEventList(obj)
+            obj.bEventListGenerated = false;
+        end
+
+        %%%
+        function neuralPatternIDEventList = getNeuralPatternIDEventList(obj)
+            obj.prepare();
+
+            for i = obj.numRuns:-1:1
+                neuralPatternIDEventList(i)          = obj.unqIDEventList(i);
+                neuralPatternIDEventList(i).Activity = obj.NeuralIntensity(obj.unqIDEventList(i).ID);
+                neuralPatternIDEventList(i).ID       = obj.NeuralPatternIDs(obj.unqIDEventList(i).ID);
+            end
+        end
+
+        %%% LSA
+        function eventList = getGlmLSA(obj)
+            obj.prepare();
+
+            for i = obj.numRuns:-1:1
+                obj.eventNoIntoRegID{i} = obj.transformToRunwiseAndEventwise(...
+                    obj.eventNoIntoAnalysisID{i},...
+                    obj.runwiseAnalysisIDs);
+            end
+
+            eventList = obj.replaceIDsOfEventList(obj.idLessEventList, obj.eventNoIntoRegID);
+
+            obj.lastMethod = "lsa";
+        end
+
+        function labelsAndGroups = getMvpaLSA(obj)
+            if ~(obj.lastMethod == "lsa")
                 obj.getGlmLSA();
             end
+            
+            obj.computeLabelsAndGroupsAdjustedToRegIDs();
+            
+            labelsAndGroups = struct('Labels', obj.regIDIntoClassifLabel, ...
+                                     'Groups', obj.regIDIntoClassifGroup);
+        end
 
-            if obj.isFieldClear(obj.lsa, 'regIDIntoAnalysisID')
-                for i = obj.numRuns:-1:1 
-                    obj.lsa(i).regIDIntoAnalysisID = getRegIDIntoAnalysisID(...
-                        obj.lsa(i).eventNoIntoRegID,...
-                        obj.lsa(i).eventNoIntoAnalysisID);
+        %%% LSS
+        function eventList = getGlmLSS2(obj)
+            obj.prepare();
 
-                    obj.lsa(i).regIDIntoClassifGroup = getRegIDIntoClassifGroup(...
-                        obj.lsa(i).regIDIntoAnalysisID);
-                    nonClaIdx = ismember(obj.lsa(i).regIDIntoClassifGroup,...
-                                         obj.doNotClassifyGroupIDs);
+            obj.computeRegIDWithAllEventsRunwise();
+            eventList = obj.replaceIDsOfEventList(obj.idLessEventList, obj.eventNoIntoRegID);
 
-                    obj.lsa(i).regIDIntoClassifLabel = getRegIDIntoClassifLabel(...
-                        obj.lsa(i).regIDIntoAnalysisID);
-                    obj.lsa(i).regIDIntoClassifLabel(nonClaIdx) = nan;
-                end
+            obj.lastMethod = "lss2";
+        end
+
+        function eventList = getGlmLSS1(obj)
+            obj.prepare();
+            
+            for i = obj.numRuns:-1:1
+                eventList(i) = obj.idLessEventList(i);
+                eventList(i).ID = 1;
             end
 
-            mvpaLSA = struct('Labels', {obj.lsa.regIDIntoClassifLabel}, ...
-                             'Groups', {obj.lsa.regIDIntoClassifGroup});
+            obj.lastMethod = "lss1";
+        end
 
-            function reg2analysis = getRegIDIntoAnalysisID(regressionID, analysisID)
-                unqRegIDs = unique(regressionID(:)');
-                for unqID = unqRegIDs(end:-1:1)
-                    tmp = analysisID(regressionID == unqID);
-                    reg2analysis(unqID) = unique(tmp); %#ok<AGROW>
-                end
-                reg2analysis = reg2analysis(:);
+        function labelsAndGroups = getMvpaLSS(obj)
+            obj.prepare();
+            
+            for i = obj.numRuns:-1:1
+                obj.regIDIntoClassifGroup{i} = obj.replaceValues(...
+                    obj.unqIDEventList(i).ID, ...
+                    obj.EventIDs, ...
+                    obj.ClassificationGroups);
+                nonClaIdx = ismember(obj.regIDIntoClassifGroup{i},...
+                                     obj.doNotClassifyGroupIDs);
+
+                obj.regIDIntoClassifLabel{i} = obj.replaceValues(...
+                    obj.unqIDEventList(i).ID, ...
+                    obj.EventIDs, ...
+                    obj.NeuralPatternIDs);
+                obj.regIDIntoClassifLabel{i}(nonClaIdx) = nan;
             end
 
-            function classifLabels = getRegIDIntoClassifLabel(analysisID)
-                classifLabels = obj.replaceValues(analysisID, obj.AnalysisIDs, obj.NeuralPatternIDs);
-            end
+            labelsAndGroups = struct('Labels', obj.regIDIntoClassifLabel, ...
+                                     'Groups', obj.regIDIntoClassifGroup);
 
-            function classifGroups = getRegIDIntoClassifGroup(analysisID)
-                classifGroups = obj.replaceValues(analysisID, obj.AnalysisIDs, obj.ClassificationGroups);
+        end
+
+        %%% LSU
+        function eventList = getGlmLSU(obj)
+            obj.prepare();
+
+            obj.computeRegIDWithAllEventsRunwise();
+            eventList = obj.replaceIDsOfEventList(obj.idLessEventList, obj.eventNoIntoRegID);
+
+            obj.lastMethod = "lsu";
+        end
+
+
+        function labelsAndGroups = getMvpaLSU(obj)
+            if ~(obj.lastMethod == "lsu")
+                obj.getGlmLSU();
             end
+            
+            obj.computeLabelsAndGroupsAdjustedToRegIDs();
+            
+            labelsAndGroups = struct('Labels', obj.regIDIntoClassifLabel, ...
+                                     'Groups', obj.regIDIntoClassifGroup);
         end
     end
 
-    methods % Set methods
-        function set.runwiseAnalysisIDs(obj, runwiseAnalysisIDs)
-            obj.runwiseAnalysisIDs = obj.runwiseAnalysisIDs(:)';
-            obj.runwiseAnalysisIDs = unique(runwiseAnalysisIDs);
+    methods (Access = private)
+        function prepare(obj)
+            if obj.bEventListGenerated
+                return;
+            end
+            
+            assert(~isempty(obj.simProperties), "simProperties property is not set");
+            assert(~isempty(obj.taskTable), "taskTable property is not set");
+
+            obj.generateEventList();
+
+            for i = obj.numRuns:-1:1
+                obj.eventNoIntoAnalysisID{i} = obj.AnalysisIDs(obj.unqIDEventList(i).ID);
+
+                obj.idLessEventList(i) = obj.unqIDEventList(i);
+                obj.idLessEventList(i).ID = 999;
+            end
+
+            obj.bEventListGenerated = true;
+        end
+
+        function generateEventList(obj)
+            for i = obj.numRuns:-1:1
+                [eventList, trialSeq] = makefmriseq(...
+                    obj.taskTable.contentNumerical.Durations(:)',...
+                    obj.taskTable.contentNumerical.EventIDs(:)',...
+                    obj.taskTable.contentNumerical.Probability(:)',...
+                    obj.simProperties.runDuration,...
+                    1,...
+                    obj.simProperties.itiModel,...
+                    obj.simProperties.itiParams,...
+                    obj.simProperties.TR,...
+                    'addExtraTrials', 0);
+                obj.unqIDEventList(i) = fm_eventList(eventList{1}, obj.simProperties.runDuration);
+                obj.trialSequence{i} = trialSeq{1};
+            end
+            % TODO: onset times are not used at all
+        end
+
+        function computeRegIDWithAllEventsRunwise(obj)
+            for i = obj.numRuns:-1:1
+                obj.eventNoIntoRegID{i} = obj.transformToRunwiseAndEventwise(...
+                    obj.eventNoIntoAnalysisID{i},...
+                    unique(obj.AnalysisIDs(:)'));
+            end
+        end
+
+        function computeLabelsAndGroupsAdjustedToRegIDs(obj)
+            for i = obj.numRuns:-1:1 
+                obj.regIDIntoAnalysisID{i} = obj.transform2AIntoB(...
+                    obj.eventNoIntoRegID{i},...
+                    obj.eventNoIntoAnalysisID{i});
+
+                obj.regIDIntoClassifGroup{i} = obj.replaceValues(...
+                    obj.regIDIntoAnalysisID{i}, ...
+                    obj.AnalysisIDs, ...
+                    obj.ClassificationGroups);
+                nonClaIdx = ismember(obj.regIDIntoClassifGroup{i},...
+                                     obj.doNotClassifyGroupIDs);
+
+                obj.regIDIntoClassifLabel{i} = obj.replaceValues(...
+                    obj.regIDIntoAnalysisID{i}, ...
+                    obj.AnalysisIDs, ...
+                    obj.NeuralPatternIDs);
+                obj.regIDIntoClassifLabel{i}(nonClaIdx) = nan;
+            end
         end
     end
 
     methods (Access = private, Static = true)
-        function bEmpty = isFieldClear(structIn, fieldname)
-            bEmpty = isempty(structIn) || ~isfield(structIn, fieldname) || isempty(structIn(1).(fieldname));
+        function transformed = transformToRunwiseAndEventwise(IDs, IDsToMakeRunwise)
+            transformed = nan(size(IDs));
+
+            assignID = 1;
+            runwiseEventIdx = IDs == IDsToMakeRunwise;
+            for j = 1:length(IDsToMakeRunwise)
+                transformed(runwiseEventIdx(:,j)) = assignID;
+                assignID = assignID + 1;
+            end
+
+            nonRunwiseEventIdx = ~any(runwiseEventIdx, 2);
+            transformed(nonRunwiseEventIdx) = assignID : (assignID + sum(nonRunwiseEventIdx) - 1);
+        end
+
+        function AIntoB = transform2AIntoB(A, B)
+            unqRegIDs = unique(A(:)');
+            for unqID = unqRegIDs(end:-1:1)
+                tmp = B(A == unqID);
+                AIntoB(unqID) = unique(tmp); %#ok<AGROW>
+            end
+            AIntoB = AIntoB(:);
+        end
+
+        function eventList = replaceIDsOfEventList(eventList, IDs)
+            for i = length(eventList):-1:1
+                eventList(i).ID = IDs{i};
+            end
         end
 
         function replaced = replaceValues(data, A, B)
@@ -182,16 +276,11 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             end
         end
 
-        function outStruct = getGlmInfoStruct()
-            outStruct = struct('eventNoIntoAnalysisID', [], ...
-                               'eventNoIntoRegID',      [], ...
-                               'regEventList',          fm_eventList.empty, ...
-                               'regIDIntoAnalysisID',   [], ...
-                               'regIDIntoClassifLabel', [], ...
-                               'regIDIntoClassifGroup', []);
+        %%% destined to trash:
+        function bEmpty = isFieldClear(structIn, fieldname)
+            bEmpty = isempty(structIn) || ~isfield(structIn, fieldname) || isempty(structIn(1).(fieldname));
         end
-
-        %%% destined to trash
+        
         function replaced = replaceValues2(data, old, new)
             [found, idx] = ismember(data, old);
             replaced = data;
@@ -199,4 +288,49 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         end
     end
 
+    methods % Set and get methods
+        function set.runwiseAnalysisIDs(obj, runwiseAnalysisIDs)
+            obj.runwiseAnalysisIDs = obj.runwiseAnalysisIDs(:)';
+            obj.runwiseAnalysisIDs = unique(runwiseAnalysisIDs);
+        end
+
+        function set.taskTable(obj, taskTable)
+            if obj.bEventListGenerated
+                error("Cannot set new taskTable unless you run the regenerateEventList() function");
+            end
+
+            obj.NeuralIntensity = collapseCellArray(taskTable.contentNumerical.NeuralIntensity);
+            obj.NeuralPatternIDs = collapseCellArray(taskTable.contentNumerical.NeuralPatternIDs);
+            obj.AnalysisIDs = collapseCellArray(taskTable.contentNumerical.AnalysisIDs);
+            obj.ClassificationGroups = collapseCellArray(taskTable.contentNumerical.ClassificationGroups);
+            obj.EventIDs = collapseCellArray(taskTable.contentNumerical.EventIDs);
+
+            obj.numNeuralPatterns = length(unique(obj.NeuralPatternIDs));
+            obj.timings = taskTable.content(:, ["Durations", "Onsets"]);
+
+            obj.privateTaskTable = taskTable;
+
+            function collapsed = collapseCellArray(cellArray)
+                collapsed = [cellArray{:}];
+                collapsed = collapsed(:);
+            end
+        end
+
+        function taskTable = get.taskTable(obj)
+            taskTable = obj.privateTaskTable;
+        end
+
+        function set.simProperties(obj, simProperties)
+            if obj.bEventListGenerated
+                error("Cannot set new simProperties unless you run the regenerateEventList() function");
+            end
+
+            obj.numRuns = simProperties.numRuns;
+            obj.privateSimProperties = simProperties;
+        end
+
+        function simProperties = get.simProperties(obj)
+            simProperties = obj.privateSimProperties;
+        end
+    end
 end
