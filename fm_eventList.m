@@ -16,13 +16,13 @@ classdef fm_eventList
 
     methods
         function obj = fm_eventList(content, duration)
+            obj.privateContent = table();
             if nargin > 0
                 obj.content = content;
             end
             if nargin > 1
                 obj.runDuration = duration;
             end
-            obj.privateContent = table();
         end
 
         function elCombo = cat(elVec)
