@@ -6,9 +6,6 @@ classdef fm_task < matlab.mixin.Copyable
 
     properties
         expand (1,1) logical = false;
-    end
-
-    properties (SetAccess = private)
         contentNumerical;
     end
 
@@ -54,9 +51,9 @@ classdef fm_task < matlab.mixin.Copyable
         end
 
         function set.content(obj, content)
-            numRows = height(content);
+            numRowsOfContentInitial = height(content);
 
-            if numRows == 0
+            if numRowsOfContentInitial == 0
                 obj.privateContent = obj.getEmptyTaskTable();
                 obj.contentNumerical = table.empty;
                 return;
@@ -80,7 +77,10 @@ classdef fm_task < matlab.mixin.Copyable
             obj.expand = false;
             
             obj.privateContent = obj.convertNumericalTableToString(contentNumer);
-            obj.contentNumerical = [contentNumer, obj.calculateEventIDs(contentNumer)];
+            obj.contentNumerical = [...
+                contentNumer,...
+                obj.calculateEventIDs(contentNumer),...
+                computeTotalDurationPerCondition(contentNumer)];
             
             function content = handleInputBeingCell(content)
                 if iscell(content)
@@ -103,7 +103,7 @@ classdef fm_task < matlab.mixin.Copyable
             end
 
             function checkFieldSizes(entryLengths)
-                for r = 1:numRows
+                for r = 1:numRowsOfContentInitial
                     emptyFields = entryLengths(r, :) == 0;
                     unfilledColumns = emptyFields & obj.necessaryColumns;
                     if any(unfilledColumns)
@@ -122,7 +122,7 @@ classdef fm_task < matlab.mixin.Copyable
             end
 
             function contentNumer = fillOptionalFields(contentNumer, entryLengths)
-                for r = 1:numRows
+                for r = 1:numRowsOfContentInitial
                     if entryLengths(r, strcmpi(obj.colNames, 'Onsets')) == 0
                         contentNumer.Onsets{r} = [0 cumsum(contentNumer.Durations{r}(1:end-1))];
                     end
@@ -131,6 +131,13 @@ classdef fm_task < matlab.mixin.Copyable
                         contentNumer.NeuralIntensity{r} = ones(1, length(contentNumer.Durations{r}));
                     end
                 end
+            end
+
+            function totalDuration = computeTotalDurationPerCondition(contentNumer)
+                for r = height(contentNumer):-1:1
+                    totalDuration(r) = max(contentNumer.Durations{r} + contentNumer.Onsets{r});
+                end
+                totalDuration = table(totalDuration(:), 'VariableNames', {'TotalDuration'});
             end
         end
 
