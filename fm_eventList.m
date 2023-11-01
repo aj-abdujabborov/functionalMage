@@ -152,7 +152,7 @@ classdef fm_eventList
             obj.privateContent = table();
 
             if any(tableFields == "Trial")
-                obj.Trial = nan(height(content), 1);
+                obj.Trial = content.Trial;
             end
             if any(tableFields == "ID")
                 obj.ID = content.ID;
