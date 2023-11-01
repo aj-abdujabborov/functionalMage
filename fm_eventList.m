@@ -1,10 +1,11 @@
 classdef fm_eventList
     properties (Dependent = true)
+        Trial;
         ID;
         Activity;
         Duration;
         Onset;
-        content (:,4) table;
+        content (:,:) table;
         runDuration (1,1) {mustBeNonnegative};
     end
 
@@ -21,6 +22,7 @@ classdef fm_eventList
             if nargin > 1
                 obj.runDuration = duration;
             end
+            obj.privateContent = table();
         end
 
         function elCombo = cat(elVec)
@@ -29,10 +31,19 @@ classdef fm_eventList
                 return;
             end
 
+            trialColExists = false(1, length(elVec));
+            for i = 1:length(elVec)
+                trialColExists(i) = any("Trial" == string(elVec(i).content.Properties.VariableNames));
+            end
+            bCatTrial = all(trialColExists);
+
             elVec(1).validate();
             for i = 2:length(elVec)
                 elVec(i).validate();
                 elVec(i).Onset = elVec(i).Onset + sum([elVec(1:i-1).runDuration]);
+                if bCatTrial
+                    elVec(i).Trial = elVec(i).Trial + elVec(i-1).Trial(end);
+                end
             end
             elCombo = fm_eventList(cat(1, elVec.content), sum([elVec.runDuration]));
         end
@@ -96,12 +107,20 @@ classdef fm_eventList
     end
 
     methods % Set and Get methods
+        function obj = set.Trial(obj, Trial)
+            obj.privateContent.Trial(:) = Trial(:);
+        end
+
+        function Trial = get.Trial(obj)
+            Trial = obj.privateContent.Trial;
+        end
+
         function obj = set.ID(obj, ID)
             obj.privateContent.ID(:) = ID(:);
         end
 
         function ID = get.ID(obj)
-            ID = obj.content.ID;
+            ID = obj.privateContent.ID;
         end
 
         function obj = set.Activity(obj, Activity)
@@ -109,7 +128,7 @@ classdef fm_eventList
         end
 
         function Activity = get.Activity(obj)
-            Activity = obj.content.Activity;
+            Activity = obj.privateContent.Activity;
         end
 
         function obj = set.Duration(obj, Duration)
@@ -117,7 +136,7 @@ classdef fm_eventList
         end
 
         function Duration = get.Duration(obj)
-            Duration = obj.content.Duration;
+            Duration = obj.privateContent.Duration;
         end
 
         function obj = set.Onset(obj, Onset)
@@ -125,19 +144,28 @@ classdef fm_eventList
         end
 
         function Onset = get.Onset(obj)
-            Onset = obj.content.Onset;
+            Onset = obj.privateContent.Onset;
         end
 
         function obj = set.content(obj, content)
-            tableFields = summary(content);
-            if ~all(isfield(tableFields, {'ID', 'Activity', 'Duration', 'Onset'}))
-                error("A necessary field is missing from the table");
-            end
+            tableFields = string(content.Properties.VariableNames);
             obj.privateContent = table();
-            obj.ID = content.ID;
-            obj.Activity = content.Activity;
-            obj.Duration = content.Duration;
-            obj.Onset = content.Onset;
+
+            if any(tableFields == "Trial")
+                obj.Trial = nan(height(content), 1);
+            end
+            if any(tableFields == "ID")
+                obj.ID = content.ID;
+            end
+            if any(tableFields == "Activity")
+                obj.Activity = content.Activity;
+            end
+            if any(tableFields == "Duration")
+                obj.Duration = content.Duration;
+            end
+            if any(tableFields == "Onset")
+                obj.Onset = content.Onset;
+            end
         end
 
         function content = get.content(obj)
@@ -155,9 +183,9 @@ classdef fm_eventList
 
     methods (Static = true)
         function eventList = preallocate(height, runDuration)
-            T = table('Size', [height, 4],...
-                'VariableNames', {'ID', 'Activity', 'Duration', 'Onset'},...
-                'VariableTypes', {'double', 'double', 'double', 'double'});
+            T = table('Size', [height, 5],...
+                'VariableNames', {'Trial', 'ID', 'Activity', 'Duration', 'Onset'},...
+                'VariableTypes', {'double', 'double', 'double', 'double', 'double'});
             T{:,:} = nan;
 
             if exist('runDuration', 'var')
