@@ -1,5 +1,11 @@
 % TODO: add storage of timing and add capabiilty to update the timings
 
+% TODO:
+% * check mapability from one vector to another e.g., the
+% same AnalysisID values cannot map to
+% different NeuralPatternIDs (unless they are chosen to not
+% be classified). same from AnalysisID to ClassificationGroups
+
 classdef fm_designMatrix < matlab.mixin.Copyable
     properties (Dependent = true)
         taskTable {mustBeA(taskTable, 'fm_taskTable')};
@@ -279,12 +285,6 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         %%% destined to trash:
         function bEmpty = isFieldClear(structIn, fieldname)
             bEmpty = isempty(structIn) || ~isfield(structIn, fieldname) || isempty(structIn(1).(fieldname));
-        end
-        
-        function replaced = replaceValues2(data, old, new)
-            [found, idx] = ismember(data, old);
-            replaced = data;
-            replaced(found) = new(idx(found));
         end
     end
 
