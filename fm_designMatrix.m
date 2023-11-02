@@ -1,9 +1,10 @@
-% TODO: add storage of timing and add capabiilty to update the timings
-
 classdef fm_designMatrix < matlab.mixin.Copyable
+
+
+% TODO: add storage of timing and add capabiilty to update the timings so
+% that the model can be different from the simulation
     properties (Dependent = true)
-        taskTable {mustBeA(taskTable, 'fm_taskTable')};
-        simProperties {mustBeA(simProperties, 'fm_simulationProperties')};
+        taskTable {mustBeA(taskTable, 'fm_task')};
     end
 
     properties
@@ -16,7 +17,6 @@ classdef fm_designMatrix < matlab.mixin.Copyable
     end
 
     properties (Access = private)
-        privateSimProperties;
         privateTaskTable;
 
         % 1D identifier vectors
@@ -39,12 +39,12 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         lastMethod string {matlab.system.mustBeMember(lastMethod, {'lsa', 'lss2', 'lss1', 'lsu', ''})} = "";
         numRuns;
 
-        bEventListGenerated = false;
+        prepSuccess = false;
     end
 
     methods
         %%%
-        function obj = fm_designMatrix(taskTable, simProperties)
+        function obj = fm_designMatrix(taskTable, eventList)
             if nargin == 0
                 return;
             end
@@ -52,13 +52,8 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                 obj.taskTable = taskTable;
             end
             if nargin >= 2
-                obj.simProperties = simProperties;
+                obj.unqIDEventList = eventList;
             end
-        end
-
-        %%%
-        function regenerateEventList(obj)
-            obj.bEventListGenerated = false;
         end
 
         %%%
@@ -167,14 +162,13 @@ classdef fm_designMatrix < matlab.mixin.Copyable
 
     methods (Access = private)
         function prepare(obj)
-            if obj.bEventListGenerated
+            if obj.prepSuccess
                 return;
             end
             
-            assert(~isempty(obj.simProperties), "simProperties property is not set");
             assert(~isempty(obj.taskTable), "taskTable property is not set");
-
-            obj.generateEventList();
+            assert(~isempty(obj.unqIDEventList), "unqIDEventList should be set");
+            obj.numRuns = length(obj.unqIDEventList);
 
             for i = obj.numRuns:-1:1
                 obj.eventNoIntoAnalysisID{i} = obj.AnalysisIDs(obj.unqIDEventList(i).ID);
@@ -183,25 +177,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                 obj.idLessEventList(i).ID = 999;
             end
 
-            obj.bEventListGenerated = true;
-        end
-
-        function generateEventList(obj)
-            for i = obj.numRuns:-1:1
-                [eventList, trialSeq] = makefmriseq(...
-                    obj.taskTable.contentNumerical.Durations(:)',...
-                    obj.taskTable.contentNumerical.EventIDs(:)',...
-                    obj.taskTable.contentNumerical.Probability(:)',...
-                    obj.simProperties.runDuration,...
-                    1,...
-                    obj.simProperties.itiModel,...
-                    obj.simProperties.itiParams,...
-                    obj.simProperties.TR,...
-                    'addExtraTrials', 0);
-                obj.unqIDEventList(i) = fm_eventList(eventList{1}, obj.simProperties.runDuration);
-                obj.trialSequence{i} = trialSeq{1};
-            end
-            % TODO: onset times are not used at all
+            obj.prepSuccess = true;
         end
 
         function computeRegIDWithAllEventsRunwise(obj)
@@ -295,9 +271,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         end
 
         function set.taskTable(obj, taskTable)
-            if obj.bEventListGenerated
-                error("Cannot set new taskTable unless you run the regenerateEventList() function");
-            end
+            obj.prepSuccess = false;
 
             obj.NeuralIntensity = collapseCellArray(taskTable.contentNumerical.NeuralIntensity);
             obj.NeuralPatternIDs = collapseCellArray(taskTable.contentNumerical.NeuralPatternIDs);
@@ -318,19 +292,6 @@ classdef fm_designMatrix < matlab.mixin.Copyable
 
         function taskTable = get.taskTable(obj)
             taskTable = obj.privateTaskTable;
-        end
-
-        function set.simProperties(obj, simProperties)
-            if obj.bEventListGenerated
-                error("Cannot set new simProperties unless you run the regenerateEventList() function");
-            end
-
-            obj.numRuns = simProperties.numRuns;
-            obj.privateSimProperties = simProperties;
-        end
-
-        function simProperties = get.simProperties(obj)
-            simProperties = obj.privateSimProperties;
         end
     end
 end

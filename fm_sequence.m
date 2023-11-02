@@ -9,6 +9,11 @@
 % width. Otherwise it'll appear there is a disproportional amount of the
 % max ITI.
 
+%   <itiModel> is either 'fixed', 'uniform' or 'exponential'
+%   <itiParams> should be a single value if itiModel is fixed, indicating
+%   the duration of the ITI, or two values otherwise, indicating the
+%   minimum and maximum duration.
+
 % Internal definitions:
 % Condition (cond): trial type without its ITI
 % Trial: a trial including the ITI
