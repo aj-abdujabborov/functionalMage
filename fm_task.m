@@ -3,7 +3,7 @@ classdef fm_task < matlab.mixin.Copyable
 % Builds a table containing crucial information about your experimental
 % task, including its timings and core simulation and analysis parameters.
 %
-% Public properties
+% Properties:
 %   <content> is a table in which each row specifies a condition of your
 %   experimental design. It has the following columns:
 %       <Probability> The relative proportion of the experiment the

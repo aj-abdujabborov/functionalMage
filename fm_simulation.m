@@ -1,7 +1,15 @@
-% numVoxels
-% TR
-
 classdef fm_simulation < matlab.mixin.Copyable
+%FM_SIMULATION Simulate fMRI data
+% Generate an fMRI dataset of with TR, variable ground-truth HRFs and noise
+%
+% Input properties
+%   <eventList> is a vector of fm_eventList objects where each object
+%   represents a run. Each 'ID' value in eventList is a random pattern of
+%   neural activity and each 'Activity' value is used to set the intensity of
+%   of neural activity. Generally, 'eventList' should be extracted from an
+%   'fm_designMatrix' object using the getNeuralPatternIDEventList()
+%   method.
+%   
 %   <TR> of simulated data
 %   <numRuns>
 %   <numVoxels>
@@ -29,6 +37,7 @@ classdef fm_simulation < matlab.mixin.Copyable
 %       
 %       Noise sources: 'AR1', 'Gaussian', 'Rician', 'Physiological'. See
 %       fm_noiseMachine for more info.
+%
 %   <neuralFluctuationAmount> is the amount of random event-to-event
 %   fluctuation (or "neural noise") to generate. A value of 2 means that
 %   every event will have a pattern of noise drawn from a uniform
@@ -36,8 +45,46 @@ classdef fm_simulation < matlab.mixin.Copyable
 %   maximum is (its neural intensity * 2).
 %   <neuralFluctuationCoherence> is how inter-correlated the neural
 %   fluctuation is among voxels. This ranges from 0 to 1.
+%
+% Output properties
+%   <boldTimeSeries> A vector of fm_data objects containing the final
+%   simulated data, including noise.
+%
+% Other output properties
+%   <neuralPatterns> is an N x numVoxels matrix, where each row contains
+%   ground-truth neural patterns. N is equal to the number of unique IDs in
+%   the input eventList property.
+%   <neuralPatternPerEvent> is an fm_data vector, each object containing
+%   the neural patterns of each event. Thus, the number of rows in this
+%   data are the same as in eventList.
+%   <neuralFluctuationPerEvent> contains the random fluctuation patterns
+%   per event.
+%   <totalNeuralActivityPerEvent> contains the final neural activity per
+%   event (including neural fluctuations).
+%   <neuralTimeSeries> A vector of fm_data objects containing "neural" time
+%   series data (generation before convolution and noise-addition).
+%   <noNoiseBoldTimeSeries> A vector of fm_data objects containing
+%   convolved data but before noise is added.
+%
+% Methods
+%   > sim = fm_simulation(eventList) returns an fm_simulation object.
+%   > generate() will simulate the fMRI data with all the specified
+%   properties. It should be launched once all the properties are set.
+%
+% Examples
+%   eventList = dm.getNeuralPatternIDEventList(); 'dm' is a fm_designMatrix object
+%   sim = fm_simulation();
+%   sim.eventList = eventList;
+%   sim.TR = 0.5;
+%   sim.noiseSD = 4;
+%   sim.generate();
+%   disp(sim.boldTimeSeries()) % outputs the generated fMRI time series
+%
+% Part of package funkyMage. November 2023.
+% https://github.com/aj-abdujabborov/funkyMage
 
     properties
+        eventList fm_eventList;
         TR (1,1) {mustBePositive} = 1;
         numVoxels (1,1) {mustBePositive} = 30;
         hrfLibrary (1,1) {matlab.system.mustBeMember(hrfLibrary, {'simtb', 'nsd'})} = "simtb";
@@ -47,7 +94,6 @@ classdef fm_simulation < matlab.mixin.Copyable
         noiseSources (1,:) {mustBeA(noiseSources, 'cell')} = {'AR1', 1};
         neuralFluctuationAmount (1,1) {mustBeNonnegative} = 2;
         neuralFluctuationCoherence (1,1) {mustBeNonnegative} = 0.5;
-        eventList fm_eventList;
 
         neuralPatterns (:,:) {mustBeFinite};
 

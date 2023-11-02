@@ -1,18 +1,63 @@
 classdef fm_designMatrix < matlab.mixin.Copyable
+%FM_DESIGNMATRIX Do all design-matrix related maneuvers
+% Combine an 'fm_task' object and an associated 'fm_eventList' object
+% (acquired from 'fm_sequence') and produce design matrices for simulation,
+% General Linear Modeling, and classification analysis.
+%
+% Input properties
+%   <task> A filled fm_task object
+%   <unqEventList> A vector of 'fm_eventList' objects acquired from
+%   'fm_sequence'
+%   <runwiseAnalysisIDs> The AnalysisIDs of events (from 'fm_task') that
+%   you'd like to analyze run-wise no matter what (even with a Least
+%   Squares All or trial-wise analysis). Empty by default.
+%   <doNotClassifyGroupIDs> ClassificationGroup values of events (from
+%   'fm_task') that you do not want to classify. 0 by default. In other
+%   words, set a 0 to all events you do not want classified in
+%   'ClassificationGroups'.
+% 
+% Methods
+%   > dm = fm_designMatrix(task, unqEventList) returns an fm_designMatrix
+%   object.
+%   > getNeuralPatternIDEventList() returns a vector of fm_eventList
+%   objects that are supplied to fm_simulation.
+%   > getGlmLSA() returns a vector of fm_eventList objects to be used by
+%   fm_glm for a Least Squares All analysis.
+%   > getMvpaLSA() returns a structure with fields 'label' and 'group'
+%   indicating the classification label and ClassificationGroup of each
+%   beta estimate produced by fm_glm. It's to be used with fm_mvpa. In
+%   other words, once you use getGlmLSA() on fm_glm, you'd use getMvpaLSA()
+%   on fm_mvpa.
+%   > getGlmLSS1() for a Least Squares Separate analysis, which takes a
+%   "pull one out" approach. For each event, a separate OLS General Linear
+%   Model is run where that event gets its own regressor and the other
+%   events are all combined into another regressor. 
+%   > getGlmLSS2() Also a Least Squares Separate, but the "other" events
+%   are combined according to their AnalysisID rather than into one
+%   regressor.
+%   > getMvpaLSS() for Least Squares Separate classifications.
+%   > getGlmLSU() for a Least Squares Unitary analysis, where rather than
+%   get an estimate for each event, an estimate is produced for each event
+%   type (here indicated by AnalysisID).
+%   > getMvpaLSU() for a Least Squares Unitary classification analysis.
+%
+% Examples
+%   dm = fm_designMatrix(task, seq.eventList) % seq is an 'fm_sequence' object
+%   dm.runwiseAnalysisIDs = [1 2]; 
+%        % collapse multiple events into two regressors
+%   dm.getGlmLSA() % for LSA GLM
+%   dm.getMvpaLSA() % for MVPA analysis using fm_glm output
+%
+% Part of package funkyMage. November 2023.
+% https://github.com/aj-abdujabborov/funkyMage
 
-
-% TODO: add storage of timing and add capabiilty to update the timings so
-% that the model can be different from the simulation
     properties (Dependent = true)
-        taskTable {mustBeA(taskTable, 'fm_task')};
+        task {mustBeA(task, 'fm_task')};
     end
 
     properties
+        unqIDEventList (1,:) {mustBeA(unqIDEventList, 'fm_eventList')} = fm_eventList.empty;
         runwiseAnalysisIDs (1,:) {mustBeInteger} = [];
-        timings;
-    end
-
-    properties (Hidden = true)
         doNotClassifyGroupIDs = [0];
     end
 
@@ -26,7 +71,6 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         ClassificationGroups;
         EventIDs;
 
-        unqIDEventList = fm_eventList.empty;
         idLessEventList = fm_eventList.empty;
         trialSequence;
 
@@ -44,12 +88,12 @@ classdef fm_designMatrix < matlab.mixin.Copyable
 
     methods
         %%%
-        function obj = fm_designMatrix(taskTable, eventList)
+        function obj = fm_designMatrix(task, eventList)
             if nargin == 0
                 return;
             end
             if nargin >= 1
-                obj.taskTable = taskTable;
+                obj.task = task;
             end
             if nargin >= 2
                 obj.unqIDEventList = eventList;
@@ -166,7 +210,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                 return;
             end
             
-            assert(~isempty(obj.taskTable), "taskTable property is not set");
+            assert(~isempty(obj.task), "task property is not set");
             assert(~isempty(obj.unqIDEventList), "unqIDEventList should be set");
             obj.numRuns = length(obj.unqIDEventList);
 
@@ -270,19 +314,19 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             obj.runwiseAnalysisIDs = unique(runwiseAnalysisIDs);
         end
 
-        function set.taskTable(obj, taskTable)
+        function set.task(obj, task)
             obj.prepSuccess = false;
 
-            obj.NeuralIntensity = collapseCellArray(taskTable.contentNumerical.NeuralIntensity);
-            obj.NeuralPatternIDs = collapseCellArray(taskTable.contentNumerical.NeuralPatternIDs);
-            obj.AnalysisIDs = collapseCellArray(taskTable.contentNumerical.AnalysisIDs);
-            obj.ClassificationGroups = collapseCellArray(taskTable.contentNumerical.ClassificationGroups);
-            obj.EventIDs = collapseCellArray(taskTable.contentNumerical.EventIDs);
+            obj.NeuralIntensity = collapseCellArray(task.contentNumerical.NeuralIntensity);
+            obj.NeuralPatternIDs = collapseCellArray(task.contentNumerical.NeuralPatternIDs);
+            obj.AnalysisIDs = collapseCellArray(task.contentNumerical.AnalysisIDs);
+            obj.ClassificationGroups = collapseCellArray(task.contentNumerical.ClassificationGroups);
+            obj.EventIDs = collapseCellArray(task.contentNumerical.EventIDs);
 
             obj.numNeuralPatterns = length(unique(obj.NeuralPatternIDs));
-            obj.timings = taskTable.content(:, ["Durations", "Onsets"]);
+            % obj.timings = task.content(:, ["Durations", "Onsets"]);
 
-            obj.privateTaskTable = taskTable;
+            obj.privateTaskTable = task;
 
             function collapsed = collapseCellArray(cellArray)
                 collapsed = [cellArray{:}];
@@ -290,8 +334,8 @@ classdef fm_designMatrix < matlab.mixin.Copyable
             end
         end
 
-        function taskTable = get.taskTable(obj)
-            taskTable = obj.privateTaskTable;
+        function task = get.task(obj)
+            task = obj.privateTaskTable;
         end
     end
 end
