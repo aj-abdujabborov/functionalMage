@@ -1,10 +1,124 @@
-% Guide notes
+classdef fm_glm < matlab.mixin.Copyable
+%FM_GLM Run a General Linear Model on fMRI data
+% Takes an fm_eventList vector and fm_data vector along with other
+% parameters and outputs parameter estimates (betas).
+%
+% Input properties
+%   <fmriData> is a vector of fm_data objects
+%   <eventList> is an fm_eventList vector representing the design matrix
+%     for the 'fmriData' property
+%
+%   <framework> is the approach taken to analyzing the data. It can be one
+%   of three values.
+%       'findBestHrfs': perform a Least Squares All analysis on the data
+%       for the purpose of identifying the best-fitting HRF. When 'hrf' is
+%       set to 'derivative-1' or 'derivative-2', this means collapsing all
+%       events into one regressor. Otherwise, this means ...
+%       'ols': perform an Ordinary Least Squares analysis on the data. This
+%       should be used *unless* you're doing a Least Squares Separate
+%       analysis.
+%       'lss': Least Squares Separate analysis, implemented as a series of
+%       OLS analyses.
+%   <lssEventsToDo> LSS analyses can be time-consuming. With this property,
+%     you can specify which events the estimates should be computed for.
+%     'lssEventsToDo' is a cell array of column vectors, each cell
+%     corresponding to a run. The column vector should contain the *indices*
+%     of the events in the corresponding eventList property for which you
+%     need to get an estimate. For example, if you only want estimates for
+%     IDs 4 and 5, the first cell of this property could contain:
+%     find(any(eventList(1).ID == [4 5])).
+%
+%   <hrf> is the HRF set used to model the data. This can take one of
+%   several values.
+%       'canonical': double gamma canonical HRF (from SPM)
+%       'nsd': the 20 HRFs extracted from the Natural Scenes Dataset (NSD)
+%       'nsd+canonical: NSD HRFs and canonical
+%       'derivative-1': model the HRF with the temporal derivative of
+%       the canonical HRF
+%       'derivative-2': model the HRF with temporal and dispersion derivatives
+%       of the canonical HRF
+%       'custom': provide your own HRFs. See next property.
+%   <hrfsMatrix> If you set 'hrf' to 'custom', provide a 2D matrix of your
+%     own analytical HRFs where each column is an HRF. Note that you should
+%     ensure the temporal resolution of the HRFs matches the TR of the design
+%     matrix (note that the design matrix may be downsampled during the
+%     analysis if it's too fine for the data).
+%   <hrfsIdx> When you request that more than one HRF is supplied to
+%     analyze the data, this property should be a vector of size [1 x
+%     numVoxels] and each value should indicate the column index of
+%     'hrfsMatrix' that should be used to analyze that voxel.
+%     If you set 'framework' to 'findBestHrfs', this property needs to be
+%     empty. Once you perform the analysis with that framework, 'hrfsIdx'
+%     will be automatically filled.
+%
+%   <nuissances> can be one of two values:
+%       'baselines': For each run, have a baseline regressor (column of
+%       1s). This is the default.
+%       'custom': Custom nuissances. See next property.
+%   <nuissancesData> A vector of fm_data objects containing your own custom
+%     nuissances. In case you want to regress out slow drifts in the
+%     data, with polynomials for example, you'll need to use this.
+%
+%   <ttestContrasts> A matrix indicating ttest contrasts to be done on each
+%     voxel. Each row is a contrast and columns correspond to the IDs in
+%     the supplied eventList. No contrasts are done by default.
+%   
+%   <saveFits> Whether to save the fit time series. False by default.
+%
+% Output properties
+%   <results> is a structure array containing several possible fields:
+%       'betas': fm_data object containing the parameter estimates. The ID
+%       in eventList corresponds to the row number here.
+%       'biasCorrectedBetas': if the derivative approach was used, this
+%       contains bias-corrected betas as seen in Lindquist et al. (2008),
+%       "Modeling the hemodynamic...".
+%       'fits': fm_data object containing the fit time series if 'saveFits'
+%       is true. Columns correspond to voxels.
+%       'RSqs': fm_data object containig R-squared value for each voxel. 
+%       'tstats': fm_data object with the t-stat values. Each row
+%       corresponds to a contrast specified in 'ttestContrasts'.
+%
+% Methods
+%   > glm = fm_glm(fmriData, eventList) returns an fm_glm object.
+%   > go() run the analysis once all the properties are set.
+%   > betas = getGroundTruthInBetasForm(patternPerEvent) special method for
+%     a ground-truth to betas correlation analysis done with fm_mvpa. The
+%     input is an fm_data object with the same number of rows as
+%     'eventList'. It can be acquired through the
+%     'totalNeuralActivityPerEvent' property on the fm_simulation object.
+%     It returns a vector of fm_data objects containing the ground-truth
+%     neural patterns in the same format as the betas.
+%
+% Example
+%   % Supposed 'dm' is an fm_designMatrix object and 'simulation' is an
+%   % fm_simulation object.
+%   % Fist identify the best-fitting HRFs
+%   glm = fm_glm(simulation.boldTimeSeries, dm.getGlmLSA());
+%   glm.hrf = "nsd+canonical";
+%   glm.framework = "findbesthrfs";
+%   glm.go();
+%   disp(glm.results.hrfsIdx) % indices of best-fitting HRFs
+%   % Now do an LSA analysis
+%   glm.framework = 'ols';
+%   glm.saveFits = true;
+%   glm.go();
+%   plot(glm.results(1).fits.data(:,1)) % plot fits from voxel 1 of the first run
+%   % Now do an LSS analysis
+%   glm.framework = 'lss';
+%   glm.eventList = dm.getGlmLSS2();
+%   glm.go();
+%   disp(glm.results(1).betas) % betas from the 1st run
+%
+% Part of package funkyMage. November 2023.
+% https://github.com/aj-abdujabborov/funkyMage
 
+% Not implemented
+%   <saveDesignMatrices> Whether to save the design matrices. False by
+%   default.
 % Code notes
 % * Derivative works with frameworks 'OLS' and 'findBestHrfs' but not with
 % 'LSS'.
 
-classdef fm_glm < matlab.mixin.Copyable
     properties
         fmriData (1,:) fm_data;
         eventList (1,:) fm_eventList;
@@ -15,17 +129,16 @@ classdef fm_glm < matlab.mixin.Copyable
         hrf (1,1) string {matlab.system.mustBeMember(hrf,...
                    {'nsd', 'nsd+canonical', 'canonical',...
                     'derivative-1', 'derivative-2', 'custom'})} = "canonical";
-        hrfsMatrix (:,:) uint32 {mustBeFinite};
+        hrfsMatrix (:,:) {mustBeFinite};
         hrfsIdx (1,:) {mustBeInteger, mustBePositive};
 
         nuissances (1,1) string {matlab.system.mustBeMember(nuissances, {'baselines', 'custom'})} = "baselines";
         nuissancesData (1,:) fm_data;
 
-        ttestContrasts {mustBeFinite};
+        ttestContrasts {mustBeFinite} = [];
 
-        saveFits (1,1) logical = true;
-        saveDesignMatrices (1,1) logical = true;
-            % NOT IMPLEMENTED YET
+        saveFits (1,1) logical = false;
+        saveDesignMatrices (1,1) logical = false;
     end
 
     properties (SetAccess = protected)
@@ -57,7 +170,7 @@ classdef fm_glm < matlab.mixin.Copyable
     end
 
     methods
-        function execute(obj)
+        function go(obj)
             obj.checkProperties();
             EL = obj.eventList;
 
@@ -68,6 +181,7 @@ classdef fm_glm < matlab.mixin.Copyable
                 else
                     desMat = EL.cat().openIntoUniqueEvents().computeDesignMatrix(obj.dataTR);
                     obj.results = obj.analyzeWithLibrary(desMat, diagCat(obj.nuissancesData), cat(obj.fmriData));
+                    obj.hrfsIdx = obj.results.hrfsIdx;
                 end
 
             elseif lower(obj.framework) == "ols"
@@ -131,7 +245,9 @@ classdef fm_glm < matlab.mixin.Copyable
                 betas(i) = fm_data(obj.computeOLS(X, patternPerEvent(i).data));
             end
         end
+    end
 
+    methods (Access = private)
         function out = performLSS(obj, EL, nuissancesData, fmriData, lssEventsToDo)
             obj.saveFits = false;
             obj.saveTstats = false;
@@ -139,7 +255,7 @@ classdef fm_glm < matlab.mixin.Copyable
             out = obj.preallocateOutputStructure(height(EL), fmriData.numTRs, ["betas"]);
 
             numEventsPerID = sum(EL.ID == unique(EL.ID)', 1);
-            for i = lssEventsToDo
+            for i = lssEventsToDo(:)'
                 ELCopy = EL;
 
                 if numEventsPerID(EL.ID(i)) > 1
@@ -267,19 +383,8 @@ classdef fm_glm < matlab.mixin.Copyable
 
             out.betas = fm_data(out.betas(1:width(boldDesMat), :));
         end
-    end
 
-    methods % Set and get methods
-        function set.fmriData(obj, fmriData)
-            assert(length([fmriData.TR]) == length(fmriData),...
-                   "TR of all the input data should be set to the same value");
-            assert(length([fmriData.numVoxels]) == length(fmriData),...
-                   "Number of voxels of all the input data should be the same value");
-            obj.fmriData = fmriData;
-        end
-    end
 
-    methods (Access = private)
         function checkProperties(obj)
             assert(~isempty(obj.fmriData), "fmriData property is empty");
             assert(~isempty(obj.eventList), "eventList (design matrix) propety is empty");
@@ -481,6 +586,16 @@ classdef fm_glm < matlab.mixin.Copyable
                 tmp = ones(numTRsPerRun(i), 1);
                 baselines(i) = fm_data(tmp);
             end
+        end
+    end
+
+    methods % Set and get methods
+        function set.fmriData(obj, fmriData)
+            assert(length([fmriData.TR]) == length(fmriData),...
+                   "TR of all the input data should be set to the same value");
+            assert(length([fmriData.numVoxels]) == length(fmriData),...
+                   "Number of voxels of all the input data should be the same value");
+            obj.fmriData = fmriData;
         end
     end
 end
