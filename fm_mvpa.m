@@ -1,4 +1,62 @@
 classdef fm_mvpa < matlab.mixin.Copyable
+%FM_MVPA Perform multivariate pattern analysis
+% Take neural activity data as a vector of fm_data objects along with
+% their labels and classification groups and output classification accuracy
+% or "pattern similarity" score
+% 
+% Input properties
+%   <betas> A vector of fm_data objects containing estimates of neural
+%     activity. This is generally taken from an fm_glm object.
+%   <labels> A cell array of column vectors indicating the classification
+%     label of each estimate. Vector values should be integers.
+%   <groups> A cell array of column vectors consisting of integers
+%     indicating the classification group of each estimate. Only estimates
+%     with the same 'group' values are classified together.
+%   <doNotClassifyGroupIDs> If you want to omit classifying certain events,
+%     add their 'group' values to this vector. By default, this property
+%     consists of only a zero. Therefore, if you used fm_task and set
+%     'ClassificationGroup' to 0, you do not need to modify this property.
+%
+% Methods
+%   > obj = fm_mvpa(betas, labelsAndGroupsStruct) will return an fm_mvpa
+%     object. 'labelsAndGroupsStruct' is a [1 x numRuns] structure array with
+%     fields 'Labels' and 'Groups' (case-sensitive).
+%   > obj = fm_mvpa(betas, labels, groups) is another way to create an
+%     fm_mvpa object. 'labels' and 'groups' are as they are defined above
+%     in the 'Input properties' section.
+%   > obj = fm_mvpa() will return an fm_mvpa object without input
+%     properties set.
+%   > ca = obj.getClassificationAccuracy(), where ca is a [1 x numGroups]
+%     vector of classifcation accuracy values. MVPA-Light toolbox is used
+%     for a Linear Discriminant Analysis. Data from all but one run is used
+%     for training and the last run is used for testing.
+%     https://github.com/treder/MVPA-Light
+%   > pattSim = obj.getPatternSimilarity(gtInBetasForm), where
+%     pattSim is a [1 x numGroups] vector of Pearson's correlation values
+%     between ground-truth neural patterns and the betas. gtInBetasForm is
+%     an fm_data vector the same size as the 'betas' properties containing
+%     the ground-truth neural activity patterns. You can get it by running
+%     the getGroundTruthInBetasForm() method on the fm_glm object.
+%
+% Protected methods
+%   > perf = runClassification(obj, trainData, trainLabels, testData,
+%   testLabels) runs one iteration of the classification analysis. You can
+%   make a new class that inherits from fm_mvpa and override this method to
+%   implement a custom classification algorithm.
+%
+% Example
+%   % add MVPA-light toolbox
+%   addpath('~/Downloads/MVPA-Light-master/startup')
+%   startup_MVPA_Light()
+%   % classify
+%   mvpa = fm_mvpa([glm.results.betas], dm.getMvpaLSA());
+%       % glm is an fm_glm object and dm is an fm_designMatrix object
+%   ca = mvpa.getClassificationAccuracy();
+%   disp(ca) shows a classification accuracy value for each group
+%
+% Part of package funkyMage. November 2023.
+% https://github.com/aj-abdujabborov/funkyMage
+
     properties
         betas (1,:) fm_data;
         labels;
@@ -69,7 +127,7 @@ classdef fm_mvpa < matlab.mixin.Copyable
                     trainLabels = currLabelSelector(trainSelector, :);
                     testLabels  = currLabelSelector(testSelector, :);
     
-                    perf = mv_classify(obj.classifCfg, trainData, trainLabels, testData, testLabels);
+                    perf = obj.runClassification(trainData, trainLabels, testData, testLabels);
                     caIterations(r) = perf;
                 end
 
@@ -122,6 +180,16 @@ classdef fm_mvpa < matlab.mixin.Copyable
         end
     end
 
+    methods (Access = protected)
+        function perf = runClassification(obj, trainData, trainLabels, testData, testLabels)
+            % varargin{1} -> trainData
+            % varargin{2} -> trainLabels
+            % varargin{3} -> testData
+            % varargin{4} -> testLabels
+            perf = mv_classify(obj.classifCfg, trainData, trainLabels, testData, testLabels);
+        end
+    end
+
     methods (Access = private)
         function checkProperties(obj)
             obj.numRuns = length(obj.betas);
@@ -135,7 +203,7 @@ classdef fm_mvpa < matlab.mixin.Copyable
             obj.groupIDs(ismember(obj.groupIDs, obj.doNotClassifyGroupIDs)) = [];
             obj.numGroups = length(obj.groupIDs);
 
-            obj.runSelector = getRunSelector();
+            obj.runSelector   = getRunSelector();
             obj.groupSelector = getGroupSelector();
             obj.labelSelector = cat(1, obj.labels{:});
 
