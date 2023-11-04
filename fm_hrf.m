@@ -1,4 +1,20 @@
 classdef fm_hrf
+%FM_HRF Get all sorts of HRFs
+%
+% Static methods
+%   > hrfs = fm_hrf.getAllNsdHrfs(TR) will return a matrix of HRFs
+%     extracted from the Natural Scenes Dataset where each column is an HRF
+%   > hrf  = fm_hrf.getNsdHrf(TR) will return a random NSD HRF
+%   > hrf  = fm_hrf.getCanonicalHrf(TR) will return the double gamma HRF
+%     from SPM
+%   > hrf  = fm_hrf.getSimTbHrf(TR) will return a random SimTB HRF
+%   > hrfs = fm_hrf.getDerivativeHrfs(TR, numDerivatives) will return the
+%     double-gamma canonical HRF along with its first or first & second
+%     derivatives
+%
+% Part of package funkyMage. November 2023.
+% https://github.com/aj-abdujabborov/funkyMage
+
     properties (Constant = true)
         canonicalParams = [6 16 1 1 6 0 40];
     end

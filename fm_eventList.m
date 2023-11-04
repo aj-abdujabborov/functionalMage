@@ -1,4 +1,51 @@
 classdef fm_eventList
+%FM_EVENTLIST Tabular representation of a design matrix
+% Contain ID, timing and activity information for an experimental sequence
+% and provide methods to quickly build a design matrix
+%
+% Properties
+%   <content> stores a table where each row contains information about an
+%   event. It has some or all of these columns:
+%       <Trial> Trial number in this sequence
+%       <ID> Can be AnalysisID, NeuralPatternID or anything else
+%       <Activity> Neural intensity for this event
+%       <Duration> Event length in seconds
+%       <Onset> Event start time in seconds
+%       
+%       fm_eventList contains a wrapper so that the above subproperties can
+%       be accessed more quickly. For example, instead of obj.content.ID,
+%       you can do obj.ID.
+%   <runDuration> in seconds
+%
+% Methods
+%   > obj = fm_eventList() Get an empty object.
+%   > obj = fm_eventList(content) Feed an existing table with
+%     the requisite columns.
+%   > obj = fm_eventList(content, runDuration) Also immediately supply the
+%     runDuration.
+%   > newObj = objVec.cat(), where objVec is a vector of fm_eventList
+%     objects, concatenates their info together while updating onset data
+%     and trial numbers so that they are relative to the beginning of the
+%     new, concatenated sequence.
+%   > h = obj.height(), where h is the number of events in the table.
+%   > newObj = obj.collapseIntoSuperEvent() will change all ID values to 1
+%     and return the new object.
+%   > newObj = obj.openIntoUniqueEvents() will give each event a unique ID
+%     so that there are number-of-events IDs in total.
+%   > desMat = obj.computeDesignMatrix(TR, numColumns) will transform the
+%     eventList into the matrix representation of the design matrix i.e.,
+%     [number-of-TRs by number-of-IDs]. The 'numColumns' argument is
+%     optional.
+%   > obj.validate() checks that the object's data are internally
+%     consistent e.g., the event timings do not exceed the run duration.
+%   > obj = fm_eventList.preallocate(height, runDuration) is a static
+%     method that returns an NaN-filled fm_eventList object with 'height'
+%     number of rows. 'runDuration' is optional.
+% 
+% Part of package funkyMage. November 2023.
+% https://github.com/aj-abdujabborov/funkyMage
+
+
     properties (Dependent = true)
         Trial;
         ID;
