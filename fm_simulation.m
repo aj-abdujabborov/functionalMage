@@ -23,7 +23,7 @@ classdef fm_simulation < matlab.mixin.Copyable
 %   will be distributed roughly uniformly.
 %
 %   <noiseSD> The standard deviation of noise added to the simulated data.
-%   A value of 2-4 is *approximately* realistic for an event-related
+%   A value of 2-4 seemed *approximately* realistic for an event-related
 %   working memory study I based it off, but what's realistic will vary.
 %   Ideally you'd simulate under various noise levels and verify that your
 %   conclusion is qualitatively the same. Note that the default noiseSD
@@ -68,7 +68,7 @@ classdef fm_simulation < matlab.mixin.Copyable
 %
 % Methods
 %   > sim = fm_simulation(eventList) returns an fm_simulation object.
-%   > generate() will simulate the fMRI data with all the specified
+%   > go() will simulate the fMRI data with all the specified
 %   properties. It should be launched once all the properties are set.
 %
 % Examples
@@ -77,7 +77,7 @@ classdef fm_simulation < matlab.mixin.Copyable
 %   sim.eventList = eventList;
 %   sim.TR = 0.5;
 %   sim.noiseSD = 4;
-%   sim.generate();
+%   sim.go();
 %   disp(sim.boldTimeSeries()) % outputs the generated fMRI time series
 %
 % Part of package funkyMage. November 2023.
@@ -90,7 +90,7 @@ classdef fm_simulation < matlab.mixin.Copyable
         hrfLibrary (1,1) {matlab.system.mustBeMember(hrfLibrary, {'simtb', 'nsd'})} = "simtb";
         hrfSet (:,:) = [];
         hrfsCorrelationWithDoubleGammaCanonical (1,2) = [0.6 1];
-        noiseSD (1,1) {mustBeNonnegative} = 2;
+        noiseSD (1,1) {mustBeNonnegative} = 3;
         noiseSources (1,:) {mustBeA(noiseSources, 'cell')} = {'AR1', 1};
         neuralFluctuationAmount (1,1) {mustBeNonnegative} = 2;
         neuralFluctuationCoherence (1,1) {mustBeNonnegative} = 0.5;
@@ -124,7 +124,7 @@ classdef fm_simulation < matlab.mixin.Copyable
         end
 
         %%%
-        function generate(obj)
+        function go(obj)
             assert(~isempty(obj.eventList), "Set eventList property");
 
             obj.neuralPatterns = obj.generateNeuralPatterns();
@@ -197,7 +197,7 @@ classdef fm_simulation < matlab.mixin.Copyable
             opts.correlationWithCanonical = obj.hrfsCorrelationWithDoubleGammaCanonical;
             opts.library = obj.hrfLibrary;
 
-            cacheLocation = fullfile(functionalMage.getCacheDirectory(), 'hrfDatabase.mat');
+            cacheLocation = fullfile(funkyMage.getCacheDirectory(), 'hrfDatabase.mat');
 
             HRFs = fm_hrf.getHrfsCache(obj.TR,...
                                        obj.numVoxels,...
