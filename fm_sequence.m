@@ -15,11 +15,14 @@ classdef fm_sequence < matlab.mixin.Copyable
 %     minimum and maximum ITI lengths.
 %   <TR> The temporal resolution of the sequence.
 %
-%   <matchProbabilitiesExactly> If true, this ensures that over the entire
-%     sequence, each condition will appear exactly in the proportions set
-%     in the 'content' property of the 'fm_task' object. If false,
-%     fm_sequence will randomly fill the remaining time with more trials to
-%     minimize waste. True by default.
+%   <matchProbabilitiesExactly> One of three values:
+%     'eachRun': In each run, conditions will occur exactly in the
+%       proportions specified in the fm_task object.
+%     'acrossRuns': Across all runs, conditions will occur exactly in the
+%       proportions specified in the fm_task object.
+%     'no': After making a sequence where each condition occurs exactly in
+%       the proportions specified in the fm_task object, the remaining time
+%       is filled with more trials to minimize waste.
 %   <lambda> The "steepness" of exponentially distributed ITIs. Smaller
 %     values mean more shorter-duration ITIs. Default is 3.0.
 %   <giveWarnings> Warn when more than 15% of run durations is unused. True
@@ -78,7 +81,7 @@ classdef fm_sequence < matlab.mixin.Copyable
         itiParams (1,:) {mustBeNonnegative} = 7;
         TR {mustBePositive} = 1;
 
-        matchProbabilitiesExactly (1,1) logical = true;
+        matchProbabilitiesExactly string {matlab.system.mustBeMember(matchProbabilitiesExactly, {'eachRun', 'acrossRuns', 'no'})} = 'eachRun';
         lambda (1,1) {mustBePositive} = 3.0;
 
         giveWarnings (1,1) logical = true;
@@ -118,13 +121,27 @@ classdef fm_sequence < matlab.mixin.Copyable
             obj.checkProperties();
             obj.computeItiParameters();
             obj.computeTrialParameters();
-            
-            obj.condIDsPerRun = obj.generateSequence();
-            itiSeq = cell(1, obj.numRuns);
-            for i = obj.numRuns:-1:1
-                itiSeq{i} = obj.generateItis(length(obj.condIDsPerRun{i}));
-                [obj.eventList(i), obj.eventListWIti(i)] = obj.assembleEventList(obj.condIDsPerRun{i}, itiSeq{i});
-            end
+
+            if strcmpi(obj.matchProbabilitiesExactly, "eachrun")
+                runInst = copy(obj);
+                runInst.numRuns = 1;
+                runInst.matchProbabilitiesExactly = "acrossRuns";
+                for i = obj.numRuns:-1:1
+                    runInst.go();
+                    obj.eventList(i) = runInst.eventList(1);
+                    obj.eventListWIti(i) = runInst.eventListWIti(1);
+                    obj.condIDsPerRun{i} = runInst.condIDsPerRun{1};
+                    obj.occupiedPercentage(i) = runInst.occupiedPercentage;
+                end
+
+            else
+                obj.condIDsPerRun = obj.generateSequence();
+                itiSeq = cell(1, obj.numRuns);
+                for i = obj.numRuns:-1:1
+                    itiSeq{i} = obj.generateItis(length(obj.condIDsPerRun{i}));
+                    [obj.eventList(i), obj.eventListWIti(i)] = obj.assembleEventList(obj.condIDsPerRun{i}, itiSeq{i});
+                end
+            end            
         end
     end
 
@@ -171,7 +188,7 @@ classdef fm_sequence < matlab.mixin.Copyable
 
                 numBatches = floor(breakpointsIdx(end)/numTrialsPerBatch);
             
-                if obj.matchProbabilitiesExactly
+                if ~strcmpi(obj.matchProbabilitiesExactly, "no")
                     breakpointsIdx(end) = numBatches * numTrialsPerBatch;
                         % so that we don't have a fractional amount of batches
                 end
@@ -189,7 +206,7 @@ classdef fm_sequence < matlab.mixin.Copyable
     
                 if obj.giveWarnings && obj.occupiedPercentage < 85
                     warning("Only %2.0f%% of the available time contains trials. You may want" + ...
-                            "to adjust the parameters", occupiedPercentage);
+                            "to adjust the parameters", obj.occupiedPercentage);
                 end
             end
 
