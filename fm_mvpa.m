@@ -12,6 +12,9 @@ classdef fm_mvpa < matlab.mixin.Copyable
 %   <groups> A cell array of column vectors consisting of integers
 %     indicating the classification group of each estimate. Only estimates
 %     with the same 'group' values are classified together.
+%   <labelsAndGroups> You can fill both labels and groups directly if you
+%     supply this property with the output from a getMvpa*() method from
+%     an fm_designMatrix object.
 %   <doNotClassifyGroupIDs> If you want to omit classifying certain events,
 %     add their 'group' values to this vector. By default, this property
 %     consists of only a zero. Therefore, if you used fm_task and set
@@ -59,6 +62,13 @@ classdef fm_mvpa < matlab.mixin.Copyable
 
     properties
         betas (1,:) fm_data;
+    end
+
+    properties (Dependent = true)
+        labelsAndGroups;
+    end
+
+    properties
         labels;
         groups;
 
@@ -95,8 +105,7 @@ classdef fm_mvpa < matlab.mixin.Copyable
             end
 
             if length(varargin) == 1
-                obj.labels = {varargin{1}.Labels};
-                obj.groups = {varargin{1}.Groups};
+                obj.labelsAndGroups = varargin{1};
             elseif length(varargin) == 2
                 obj.labels = varargin{1};
                 obj.groups = varargin{2};
@@ -245,6 +254,11 @@ classdef fm_mvpa < matlab.mixin.Copyable
                 error("Invalid input. Groups should be a [1 x numRuns] " + ...
                        "cell array of column vectors");
             end
+        end
+
+        function set.labelsAndGroups(obj, labelsAndGroups)
+            obj.labels = {labelsAndGroups.Labels};
+            obj.groups = {labelsAndGroups.Groups};
         end
     end
 
