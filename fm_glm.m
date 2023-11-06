@@ -445,10 +445,8 @@ classdef fm_glm < matlab.mixin.Copyable
 
             function hrfsIdx = getHrfsIdx(hrfsMatrix)
                 hrfsIdx = obj.hrfsIdx;
-                if lower(obj.framework) == "findbesthrfs"
-                    assert(isempty(obj.hrfsIdx), "hrfsIdx must be empty when framework is 'findBestHrfs'");
-                elseif contains(obj.hrf, 'derivative')
-                    assert(isempty(obj.hrfsIdx), "hrfsIdx must be empty when the hrf method is 'derivative'");
+                if lower(obj.framework) == "findbesthrfs" || contains(obj.hrf, 'derivative')
+                    hrfsIdx = [];
                 elseif width(hrfsMatrix) == 1
                     hrfsIdx = ones(1, obj.fmriData(1).numVoxels);
                 else
