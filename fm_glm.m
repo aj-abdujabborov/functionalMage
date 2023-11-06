@@ -1,48 +1,58 @@
 classdef fm_glm < matlab.mixin.Copyable
-%FM_GLM Run a General Linear Model on fMRI data
-% Takes an fm_eventList vector and fm_data vector along with other
-% parameters and outputs parameter estimates (betas).
+%FM_GLM Fit a General Linear Model on fMRI data
+% Fits fMRI data with a model encapsulated inside an fm_eventList vector
 %
 % Input properties
 %   <fmriData> is a vector of fm_data objects
 %   <eventList> is an fm_eventList vector representing the design matrix
-%     for the 'fmriData' property
 %
 %   <framework> is the approach taken to analyzing the data. It can be one
-%   of three values.
-%       'findBestHrfs': perform a Least Squares All analysis on the data
+%   of three values
+%     'findBestHrfs': Perform a Least Squares All analysis on the data
 %       for the purpose of identifying the best-fitting HRF. When 'hrf' is
 %       set to 'derivative-1' or 'derivative-2', this means collapsing all
-%       events into one regressor. Otherwise, this means ...
-%       'ols': perform an Ordinary Least Squares analysis on the data. This
-%       should be used *unless* you're doing a Least Squares Separate
-%       analysis.
-%       'lss': Least Squares Separate analysis, implemented as a series of
-%       OLS analyses.
+%       events into one regressor. Otherwise, this means identifying which
+%       HRF from the provided or pre-existing set best fits each voxel by
+%       running a separate model for every HRF on all the voxels.
+%     'OLS': Perform an Ordinary Least Squares analysis on the data. This
+%       is the default and should be used unless you're doing a Least
+%       Squares Separate analysis. 
+%     'LSS': Least Squares Separate analysis, where each event's magnitude
+%       of activity is estimated by running a model where that event gets a
+%       dedicated regressor and all other events are collapsed into one or
+%       a small number of regressors. "help fm_designMatrix" for more info.
+%
+%       This paper gives an overview:
+%       Arco, J. E., González-García, C., Díaz-Gutiérrez, P., Ramírez, J.,
+%       & Ruz, M. (2018). Influence of activation pattern estimates and
+%       statistical significance tests in fMRI decoding analysis. Journal
+%       of Neuroscience Methods, 308, 248–260
+%       
 %   <lssEventsToDo> LSS analyses can be time-consuming. With this property,
 %     you can specify which events the estimates should be computed for.
 %     'lssEventsToDo' is a cell array of column vectors, each cell
-%     corresponding to a run. The column vector should contain the *indices*
-%     of the events in the corresponding eventList property for which you
-%     need to get an estimate. For example, if you only want estimates for
-%     IDs 4 and 5, the first cell of this property could contain:
-%     find(any(eventList(1).ID == [4 5])).
+%     corresponding to a run. Each column vector should contain the
+%     *indices* of the events in the corresponding eventList property for
+%     which you need to get an estimate. 
+% 
+%     For example, if you only want estimates for IDs 4 and 5, each cell of
+%     this property could contain: find(any(eventList(runNo).ID == [4 5]))
 %
-%   <hrf> is the HRF set used to model the data. This can take one of
-%   several values.
-%       'canonical': double gamma canonical HRF (from SPM)
-%       'nsd': the 20 HRFs extracted from the Natural Scenes Dataset (NSD)
-%       'nsd+canonical: NSD HRFs and canonical
-%       'derivative-1': model the HRF with the temporal derivative of
-%       the canonical HRF
-%       'derivative-2': model the HRF with temporal and dispersion derivatives
-%       of the canonical HRF
-%       'custom': provide your own HRFs. See next property.
+%   <hrf> sets the analytical HRF model. Possible values:
+%       'canonical': double gamma canonical HRF from SPM
+%       'nsd': the 20 HRFs extracted from the Natural Scenes Dataset
+%       'nsd+canonical: NSD HRFs + canonical (21 in total)
+%       'derivative-1': model the HRF with the canonical HRF and its
+%         temporal derivative
+%       'derivative-2': model the HRF with the canonical HRF and its
+%         temporal and dispersion derivatives
+%       'custom': provide your own HRFs inside 'hrfsMatrix' property
 %   <hrfsMatrix> If you set 'hrf' to 'custom', provide a 2D matrix of your
-%     own analytical HRFs where each column is an HRF. Note that you should
-%     ensure the temporal resolution of the HRFs matches the TR of the design
-%     matrix (note that the design matrix may be downsampled during the
-%     analysis if it's too fine for the data).
+%     own analytical HRFs where each column is an HRF. Do ensure the
+%     temporal resolution of the HRFs matches the TR of the design matrix.
+%     Note that the design matrix may be downsampled during the analysis if
+%     it's TR is higher than the data's. 'hrfsMatrix' should match this
+%     downsampled design matrix.
 %   <hrfsIdx> When you request that more than one HRF is supplied to
 %     analyze the data, this property should be a vector of size [1 x
 %     numVoxels] and each value should indicate the column index of
@@ -52,42 +62,45 @@ classdef fm_glm < matlab.mixin.Copyable
 %     will be automatically filled.
 %
 %   <nuissances> can be one of two values:
-%       'baselines': For each run, have a baseline regressor (column of
-%       1s). This is the default.
-%       'custom': Custom nuissances. See next property.
+%     'baselines': For each run, have a baseline regressor. This is the
+%       default.
+%     'custom': Custom nuissances. See next property.
 %   <nuissancesData> A vector of fm_data objects containing your own custom
-%     nuissances. In case you want to regress out slow drifts in the
-%     data, with polynomials for example, you'll need to use this.
+%     nuissances. In case you want to regress out slow drifts in the data,
+%     with polynomials for example, you'll need to use this.
 %
-%   <ttestContrasts> A matrix indicating ttest contrasts to be done on each
-%     voxel. Each row is a contrast and columns correspond to the IDs in
-%     the supplied eventList. No contrasts are done by default.
+%   <ttestContrasts> A matrix indicating ttest contrasts. Each row is a
+%     contrast and columns correspond to the IDs in the supplied eventList.
+%     Empty by default.
 %   
 %   <saveFits> Whether to save the fit time series. False by default.
 %
 % Output properties
 %   <results> is a structure array containing several possible fields:
-%       'betas': fm_data object containing the parameter estimates. The ID
+%     'betas': fm_data object containing the parameter estimates. The ID
 %       in eventList corresponds to the row number here.
-%       'biasCorrectedBetas': if the derivative approach was used, this
+%     'biasCorrectedBetas': if the derivative approach was used, this
 %       contains bias-corrected betas as seen in Lindquist et al. (2008),
 %       "Modeling the hemodynamic...".
-%       'fits': fm_data object containing the fit time series if 'saveFits'
+%     'fits': fm_data object containing the fit time series if 'saveFits'
 %       is true. Columns correspond to voxels.
-%       'RSqs': fm_data object containig R-squared value for each voxel. 
-%       'tstats': fm_data object with the t-stat values. Each row
+%     'RSqs': fm_data object containig R-squared value for each voxel. 
+%     'tstats': fm_data object with t-stat values. Each row
 %       corresponds to a contrast specified in 'ttestContrasts'.
 %
+% Constructors
+%   > obj = fm_glm()
+%   > obj = fm_glm(fmriData)
+%   > obj = fm_glm(fmriData, eventList)
+%
 % Methods
-%   > glm = fm_glm(fmriData, eventList) returns an fm_glm object.
-%   > go() run the analysis once all the properties are set.
-%   > betas = getGroundTruthInBetasForm(patternPerEvent) special method for
-%     a ground-truth to betas correlation analysis done with fm_mvpa. The
-%     input is an fm_data object with the same number of rows as
-%     'eventList'. It can be acquired through the
+%   > obj.go() runs the analysis
+%   > gt = obj.getGroundTruthInBetasForm(patternPerEvent) is a special
+%     method for a ground-truth-neural-activity to betas correlation done
+%     with fm_mvpa. 'patternPerEvent' can be supplied with the
 %     'totalNeuralActivityPerEvent' property on the fm_simulation object.
-%     It returns a vector of fm_data objects containing the ground-truth
-%     neural patterns in the same format as the betas.
+%     The output 'gt' is a vector of fm_data objects containing the
+%     ground-truth neural patterns in the same format as the betas
 %
 % Example
 %   % Supposed 'dm' is an fm_designMatrix object and 'simulation' is an
@@ -485,7 +498,7 @@ classdef fm_glm < matlab.mixin.Copyable
                     "The temporal resolution of the design matrix is too fine.");
                 
                 desMatTR = gcdOfMany(decimallessTimeInfo) / 10^(multFactor);
-                bDownsampleDesMat = obj.desMatTR ~= obj.dataTR;
+                bDownsampleDesMat = desMatTR ~= obj.dataTR;
             end
 
             function validateTtestContrasts(numRegressors)

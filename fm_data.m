@@ -3,7 +3,7 @@ classdef fm_data < matlab.mixin.Copyable
 %
 % Properties
 %   <data> The 2D data matrix
-%   <TR> Optional repetition time value for fMRI time series data
+%   <TR> Optional repetition time value for time series data
 %   <ID> Optional ID values for every row of data
 %   <rowName> Optional string to describe the row axis
 %   <colName> Optional string to describe the column axis
@@ -17,19 +17,21 @@ classdef fm_data < matlab.mixin.Copyable
 %   <duration> duration of the data if TR is provided, calculated as
 %     numTRs x TR
 %
-% Methods
+% Constructors
 %   > obj = fm_data()
 %   > obj = fm_data(data)
 %   > obj = fm_data(data, TR)
 %   > obj = fm_data(data, TR, ID)
-%   > TR = objVec.getTR(), where objVec is a vector of fm_data objects, will
-%     return the TR if all of them has the same TR. Otherwise it will throw
-%     an error.
-%   > numVoxels = objVec.getNumVoxels() will return the number of voxels of
+%
+% Methods
+%   > TR = objVec.getTR(), where objVec is a vector of fm_data objects,
+%     will return the TR if all of them have the same TR. Otherwise it will
+%     throw an error
+%   > numVoxels = objVec.getNumVoxels() will return the number of voxels
 %     if all objects have the same number. Otherwise it will throw an
-%     error.
+%     error
 %   > newObj = objVec.cat() will vertically concatenate all the fm_data
-%     objects.
+%     objects
 %   > newObj = objVec.diagCat() will concatenate all the fm_data objects
 %     "diagonally", meaning that
 %       newObj.numCols = the sum of numCols of 'objVec' objects

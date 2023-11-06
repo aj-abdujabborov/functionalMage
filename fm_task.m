@@ -1,99 +1,97 @@
 classdef fm_task < matlab.mixin.Copyable
 %FM_TASK Contains information about task design
-% Builds a table containing crucial information about your experimental
-% task, including its timings and core simulation and analysis parameters.
+% Builds a table containing crucial information about the events you're
+% simulating, including their timings and core simulation and analysis
+% parameters.
 %
-% Properties:
+% Properties
 %   <content> is a table in which each row specifies a condition of your
 %   experimental design. It has the following columns:
-%       <Probability> The relative proportion of the experiment the
-%       condition should constitute. Should be a whole, nonnegative
-%       number.
-%       <Durations> A string of numbers, separated by spaces, indicating
-%       the duration of each event within that condition. For example, to
-%       make trials consisting of a 3s and 6s epoch: "2, 6".
-%       <Onsets>: A string of numbers (separated by spaces) indicating the
-%       onset time of each event with 0 indicating that the event should
-%       begin at the start of the trial. This property can be left as an
-%       empty string (i.e., ""), in which case it's assumed that you want
-%       the first event to begin at 0s and for the events to be temporally
-%       contiguous.
-%       <NeuralIntensity> A string of numbers indicating the intensity of
-%       neural activity to assign to the events during simulation. It is
-%       designed to range between 0 and 1, but any value (including
-%       negatives) will work. If left as an empty string (i.e., "") I'll
-%       fill them with 1s.
-%       <NeuralPatternIDs> A string of positive integers indicating the
-%       "ID" of each event. All events of the same ID are assigned the same
-%       pattern of neural activity during simulation. This column also
+%     <Probability> The relative proportion of the experiment this
+%       condition should constitute.
+%     <Durations> A string of numbers, separated by spaces, indicating
+%       the duration of each event within that condition in seconds.
+%     <Onsets> A string of numbers indicating the onset time of each event 
+%       in seconds, with 0 indicating that the event should begin at the
+%       start of the trial. If left as an empty string (i.e., ""), it is
+%       assumed that first event will begin at 0s and all events will be
+%       temporally contiguous.
+%     <NeuralIntensity> A string of numbers indicating the intensity of
+%       neural activity of the events. These values are used for
+%       simulation. Values are expected to range between 0 and 1, but any
+%       value (including negatives) will still work. If left as an empty
+%       string, a value of 1 is assumed.
+%     <NeuralPatternIDs> A string of positive integers indicating the
+%       identity of each event. All events of the same ID are assigned the
+%       same pattern of neural activity during simulation. This column also
 %       accepts the prefix "G" in front of any number when using the
-%       expansion feature (see expand property below).
-%       <AnalysisIDs> A string of positive integers indicating the "ID" of
-%       each event during analysis. In a univariate regression, events of
-%       the same ID are combined into the same column of the design matrix.
-%       This also supports the expansion feature.
-%       <ClassificationGroups> A string of positive integers. Events of the
-%       same group (same number) will be classified against each other
-%       e.g., if there are 3 events having the value '1', classification
-%       will be later done across three conditions within this group.
+%       expansion feature -- see 'expand' below for more.
+%     <AnalysisIDs> A string of positive integers indicating the identity
+%       of each event during analysis. Events of the same ID are seen as
+%       being the same type (i.e., of stimulus, condition, classification
+%       label). See 'expand' below for more.
+%     <ClassificationGroups> A string of positive integers. Events of the
+%       same group (same number) will be classified against each other.
+%       This is useful, for example, if there are multiple phases of the
+%       trial and you are classifying within each phase across trials and
+%       conditions.
 %
 %       Across each row, every column (with the exception of Probability or
-%       empty string columns) must have the same number of elements.
-%       Note that strings are encapsulated by double quotes. In MATLAB,
-%       single quotes create character arrays, not strings.
+%       empty string columns) must have the same quantity of numbers. Note
+%       that strings are surrounded by double quotes.
 %
 %   <expand> In certain cases, you will want to set up a task table where
-%   NeuralPatternIDs of events will vary independently between two
-%   possibilities. However, manually writing this out is tedious. If you
-%   set 'expand' to true, fm_task will automatically independently vary
-%   every event within NeuralPatternIDs that does *not* have the prefix
-%   'G'. Meanwhile, AnalysisIDs will follow the same ID structure as what
-%   you wrote except make it unique for every new generated set. An example
-%   will demonstrate it best:
-%       Assume you write a table with one condition:
+%     NeuralPatternIDs of events will vary independently between two IDs.
+%     However, manually writing this out is tedious. If you set 'expand' to
+%     true, fm_task will automatically vary every event within
+%     NeuralPatternIDs that does *not* have the prefix 'G' independently.
+%     Meanwhile, AnalysisIDs will follow the same ID structure as what you
+%     wrote except make it unique for every new generated set of
+%     conditions. For example:
+%       If you write a table with one condition and the following data:
 %       (1) NeuralPatternIDs: "g1 2 3". AnalysisIDs: "g1 2 3"
 %       It will unfold into 4 conditions:
 %       (1) NeuralPatternIDs: "1 2 2". AnalysisIDs: "1 2 3"
 %       (2) NeuralPatternIDs: "1 2 3". AnalysisIDs: "1 4 5"
 %       (3) NeuralPatternIDs: "1 3 2". AnalysisIDs: "1 6 7"
 %       (4) NeuralPatternIDs: "1 3 3". AnalysisIDs: "1 8 9"
-%       Non-g-prefixed values are varying between two states in
-%       NeuralPatternIDs.
-%       Non-g-prefix values are unique in every condition in AnalysisIDs.
+%       As you can see, non-G-prefixed values are varying between two
+%       states in NeuralPatternIDs, whereas non-g-prefix values are unique
+%       in every condition in AnalysisIDs. 
+% 
+%     If there are multiple conditions inputted, fm_task will also
+%     intelligently expand them while maintaining the specified pattern
+%     of IDs.
 %
-%       Expansion can work when you specify multiple conditions too (for
-%       example if you have multiple types of trials and you want to
-%       independently vary them as a whole set).
+%     'expand' is false by default. It will automatically turn true if the
+%     prefix "G" is used. If there is no 'G', you need to set 'expand' to
+%     true before you set the 'content' property.
 %
-%       'expand' is false by default, but it will automatically go true if
-%       the "G" prefix is used in NeuralPatternIDs or AnalysisIDs. Note
-%       that if you want expansion, you need to set 'expand' to true before
-%       you assign rows to the 'content' property.
+%     (If you really really need to expand into 3 or more states, you can
+%     set the 'numExpansionConds' property within fm_task.m itself.)
 %
-%       (If you'd really like to expand into 3 or more states, you can set
-%       the 'numExpansionConds' property within fm_task.m itself.)
+%   <contentNumerical> is spun out by using the 'content' property. It is
+%   supplied to other funkyMage classes.
 %
-%   <contentNumerical> is spun out by using the 'content' property. You
-%   should not need to change this property (though you can), but
-%   potentially supply it to other funkyMage objects.
+% Constructors
+%   obj = fm_task();
+%   obj = fm_task(content)
+%   obj = fm_task(content, expand);
 %
-% Constructor:
-%   task = fm_task(taskTable, expand);
-%
-% Examples:
+% Examples
 %   task = fm_task(); % get an empty fm_task object
 %   task.expand = true; % enable expansion if wanted
 %   task.content = [task.content;
-%       {2, "3 2", "", "1 0.5", "1 2", "1 2", "1 0"};...
-%       {1, "3",   "", "1",     "1",   "1",   "1"}];
+%       {2, "3 2", "", "", "1 2", "1 2", "1 0"};...
+%       {1, "3",   "", "",   "1",   "1",   "1"}];
 %       % append each row as a cell array of strings
-%   % 'task' is now ready to be used
+%   disp(task.content)
 %
 %   % Make table first and initialize fm_task object with it
 %   table = [{2, "3 2", "", "1 0.5", "1 2", "1 2", "1 0"};...
 %            {1, "3",   "", "1",     "1",   "1",   "1"}];
 %   task = fm_task(table, true); % second input is 'expand' and optional
-%   task.content % 'task' is now ready to be used
+%   disp(task.content)
 %
 % Part of package funkyMage. November 2023.
 % https://github.com/aj-abdujabborov/funkyMage

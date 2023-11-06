@@ -1,5 +1,5 @@
 classdef fm_hrf
-%FM_HRF Get all sorts of HRFs
+%FM_HRF Get and cache HRFs 
 %
 % Static methods
 %   > hrfs = fm_hrf.getAllNsdHrfs(TR) will return a matrix of HRFs

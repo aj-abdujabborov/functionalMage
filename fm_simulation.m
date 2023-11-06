@@ -1,80 +1,79 @@
 classdef fm_simulation < matlab.mixin.Copyable
 %FM_SIMULATION Simulate fMRI data
-% Generate an fMRI dataset of with TR, variable ground-truth HRFs and noise
+% Generate fMRI data with variable HRFs and various noise sources
 %
 % Input properties
-%   <eventList> is a vector of fm_eventList objects where each object
-%   represents a run. Each 'ID' value in eventList is a random pattern of
-%   neural activity and each 'Activity' value is used to set the intensity of
-%   of neural activity. Generally, 'eventList' should be extracted from an
-%   'fm_designMatrix' object using the getNeuralPatternIDEventList()
-%   method.
+%   <neurIDEventList> is a vector of fm_eventList objects where each object
+%     represents a run. Each ID value in neurIDEventList is a random
+%     pattern of neural activity and each 'Activity' value sets the
+%     intensity of neural activity. 'neurIDEventList' is extracted from an
+%     'fm_designMatrix' object using the getNeuralPatternIDEventList()
+%     method.
 %   
-%   <TR> of simulated data
-%   <numRuns>
-%   <numVoxels>
-%   <runDuration> in seconds
-%   <hrfLibrary> can be 'SimTB', 'NSD', or 'custom' (HRFs from Natural Scenes Dataset paper)
+%   <TR> of simulated data. Default is 1.
+%   <numVoxels> Default is 30.
+%   <hrfLibrary> can be 'SimTB', 'NSD', or 'custom' (HRFs from Natural
+%     Scenes Dataset paper). Default is 'SimTB'.
 %   <hrfSet> is a matrix where each column is an HRF. If 'hrfLibrary' is
-%   custom, you need to set this yourself.
-%   <hrfsCorrelationWithDoubleGammaCanonical> is a 1x2 vector of values
-%   between 0 and 1, indicating the range of correlations that 'hrfSet'
-%   HRFs sould have with the double gamma canonical HRF. These correlations
-%   will be distributed roughly uniformly.
+%     custom, you need to set this yourself. Default is empty.
+%   <hrfsCorrelationWithDoubleGammaCanonical> is a 2-element vector with
+%     values between 0 and 1, indicating the range of correlations that
+%     'hrfSet' HRFs sould have with the double gamma canonical HRF. The
+%     correlations are distributed roughly uniformly. Default: [0.6 1.0]
 %
 %   <noiseSD> The standard deviation of noise added to the simulated data.
-%   A value of 2-4 seemed *approximately* realistic for an event-related
-%   working memory study I based it off, but what's realistic will vary.
-%   Ideally you'd simulate under various noise levels and verify that your
-%   conclusion is qualitatively the same. Note that the default noiseSD
-%   assumes neural intensity in 'fm_task' will be a maximum of 1.
-%   <noiseSources> is a cell array of noiseSources to include, with its
-%   contents coming in pairs. The first value is the name of the source of
-%   noise and the second the relative quantity.
-%       Example: {'AR1', 1, 'Gaussian', 2}
-%       This will create twice as much Gaussian noise as it will AR1 noise
-%       and in combination they'll have a standard deviation of 'noiseSD'.
-%       
-%       Noise sources: 'AR1', 'Gaussian', 'Rician', 'Physiological'. See
-%       fm_noiseMachine for more info.
+%     A value of 2-4 is *approximately* realistic for an event-related
+%     working memory study I based it off. Ideally you'd simulate under
+%     various noise levels and verify that your conclusion is qualitatively
+%     the same. Default is 3.0
+%   <noiseSources> A cell array of noise sources to include. The entries
+%     come in pairs. The first is the name of the source and second the
+%     relative quantity. Noise sources are 'AR1', 'Gaussian', 'Rician',
+%     'Physiological'. Do "help fm_noise" for more info.
+%
+%     Example: {'AR1', 1, 'Gaussian', 2}
+%     Default is {'AR1', 1}.
 %
 %   <neuralFluctuationAmount> is the amount of random event-to-event
-%   fluctuation (or "neural noise") to generate. A value of 2 means that
-%   every event will have a pattern of noise drawn from a uniform
-%   distribution whose minimum is (-1 * its neural intensity * 2) and
-%   maximum is (its neural intensity * 2).
+%     fluctuation (or "neural noise") to generate. A value of 2 means that
+%     every event will have a pattern of noise drawn from a uniform
+%     distribution whose minimum is [its neural intensity * -2] and maximum
+%     is [its neural intensity * 2]. Default is 2.0
 %   <neuralFluctuationCoherence> is how inter-correlated the neural
-%   fluctuation is among voxels. This ranges from 0 to 1.
+%     fluctuation is among voxels. This ranges from 0 to 1. Default is 0.5
 %
 % Output properties
 %   <boldTimeSeries> A vector of fm_data objects containing the final
-%   simulated data, including noise.
+%     simulated data, including noise
 %
 % Other output properties
 %   <neuralPatterns> is an N x numVoxels matrix, where each row contains
-%   ground-truth neural patterns. N is equal to the number of unique IDs in
-%   the input eventList property.
-%   <neuralPatternPerEvent> is an fm_data vector, each object containing
-%   the neural patterns of each event. Thus, the number of rows in this
-%   data are the same as in eventList.
-%   <neuralFluctuationPerEvent> contains the random fluctuation patterns
-%   per event.
-%   <totalNeuralActivityPerEvent> contains the final neural activity per
-%   event (including neural fluctuations).
-%   <neuralTimeSeries> A vector of fm_data objects containing "neural" time
-%   series data (generation before convolution and noise-addition).
+%     ground-truth neural patterns. N is equal to the number of unique IDs
+%     in the neurIDEventList property.
+%   <neuralPatternPerEvent> is an fm_data vector, where each object
+%     contains the neural pattern for each event within a run.
+%   <neuralFluctuationPerEvent> is an fm_data vector, where each object
+%     contains the random fluctuation patterns for each event within a run
+%   <totalNeuralActivityPerEvent> is an fm_data vector, where each object
+%     contains the final neural activity patterns for each event within a
+%     run
+%   <neuralTimeSeries> is an fm_data vector containing "neural" time
+%     series data (stage prior to convolution)
 %   <noNoiseBoldTimeSeries> A vector of fm_data objects containing
-%   convolved data but before noise is added.
+%     convolved BOLD time series before noise is added
+%
+% Constructors
+%   > obj = fm_simulation()
+%   > obj = fm_simulation(neurIDEventList)
 %
 % Methods
-%   > sim = fm_simulation(eventList) returns an fm_simulation object.
-%   > go() will simulate the fMRI data with all the specified
-%   properties. It should be launched once all the properties are set.
+%   > obj.go() launches the simulation
 %
-% Examples
-%   eventList = dm.getNeuralPatternIDEventList(); 'dm' is a fm_designMatrix object
+% Example
+%   neurIDEventList = dm.getNeuralPatternIDEventList(); 
+%       % 'dm' is a fm_designMatrix object
 %   sim = fm_simulation();
-%   sim.eventList = eventList;
+%   sim.neurIDEventList = neurIDEventList;
 %   sim.TR = 0.5;
 %   sim.noiseSD = 4;
 %   sim.go();
@@ -84,7 +83,7 @@ classdef fm_simulation < matlab.mixin.Copyable
 % https://github.com/aj-abdujabborov/funkyMage
 
     properties
-        eventList fm_eventList;
+        neurIDEventList fm_eventList;
         TR (1,1) {mustBePositive} = 1;
         numVoxels (1,1) {mustBePositive} = 30;
         hrfLibrary (1,1) {matlab.system.mustBeMember(hrfLibrary, {'simtb', 'nsd'})} = "simtb";
@@ -119,26 +118,26 @@ classdef fm_simulation < matlab.mixin.Copyable
         %%%
         function obj = fm_simulation(eventList)
             if (nargin > 0)
-                obj.eventList = eventList;
+                obj.neurIDEventList = eventList;
             end
         end
 
         %%%
         function go(obj)
-            assert(~isempty(obj.eventList), "Set eventList property");
+            assert(~isempty(obj.neurIDEventList), "Set neurIDEventList property");
 
             obj.neuralPatterns = obj.generateNeuralPatterns();
             if isempty(obj.hrfSet)
                 obj.hrfSet = obj.generateHRFs();
             end
 
-            obj.runDuration = obj.eventList(1).runDuration;
-            obj.numRuns = length(obj.eventList);
+            obj.runDuration = obj.neurIDEventList(1).runDuration;
+            obj.numRuns = length(obj.neurIDEventList);
             for i = obj.numRuns:-1:1
-                obj.neuralPatternPerEvent(i)       = obj.computeNeuralPatternPerEvent(obj.eventList(i), obj.neuralPatterns);
-                obj.neuralFluctuationPerEvent(i)   = obj.generateNeuralFluctuationPerEvent(obj.eventList(i));
+                obj.neuralPatternPerEvent(i)       = obj.computeNeuralPatternPerEvent(obj.neurIDEventList(i), obj.neuralPatterns);
+                obj.neuralFluctuationPerEvent(i)   = obj.generateNeuralFluctuationPerEvent(obj.neurIDEventList(i));
                 obj.totalNeuralActivityPerEvent(i) = obj.neuralPatternPerEvent(i) + obj.neuralFluctuationPerEvent(i);
-                obj.neuralTimeSeries(i)            = obj.computeNeuralTimeSeries(obj.eventList(i), obj.totalNeuralActivityPerEvent(i));
+                obj.neuralTimeSeries(i)            = obj.computeNeuralTimeSeries(obj.neurIDEventList(i), obj.totalNeuralActivityPerEvent(i));
 
                 obj.noNoiseBoldTimeSeries(i) = obj.convolveWithHRFs(obj.neuralTimeSeries(i), obj.hrfSet);
                 
@@ -149,7 +148,7 @@ classdef fm_simulation < matlab.mixin.Copyable
 
         %%%
         function neuralPatterns = generateNeuralPatterns(obj)
-            numNeuralPatterns = max(cat(1, obj.eventList.ID));
+            numNeuralPatterns = max(cat(1, obj.neurIDEventList.ID));
             neuralPatterns = rand(numNeuralPatterns, obj.numVoxels);
         end
 

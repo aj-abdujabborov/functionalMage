@@ -1,6 +1,6 @@
 classdef fm_noise < handle
-%FM_NOISE Simulate fMRI noise
-% Simulate a combination of AR1, Gaussian, Rician and Physiological noise
+%FM_NOISE Generate fMRI noise
+% Generate a combination of AR1, Gaussian, Rician and Physiological noise
 %
 % Input properties
 %   <numTRs>
@@ -10,21 +10,22 @@ classdef fm_noise < handle
 %   
 %   <AR1> Relative proportion of first-order autoregressive Guassian noise.
 %     Default is 1. The autoregressive parameter RHO is set to 0.12.
-%   <Gaussian> Relative proportion of Gaussian noise. Default is 0.
-%   <Rician> Relative proportion of Rician noise. Default is 0.
-%   <Physiological> Relative proportion of physiological noise. Default is
-%   0.
+%   <Gaussian> Relative proportion of Gaussian noise. Default is 0
+%   <Rician> Relative proportion of Rician noise. Default is 0
+%   <Physiological> Relative proportion of physiological noise. Default is 0
 %
-% Methods
+% Constructors
 %   > obj = fm_noise()
 %   > obj = fm_noise(numTRs, numVoxels, TR, goalNoiseSD)
 %   > obj = fm_noise(numTRs, numVoxels, TR, goalNoiseSD, noise1Name,
 %     noise1Amount, noise2Name, noise2Amount...)
+%
+% Methods
 %   > noise = obj.generateNoise() returns a [numTRs by numVoxels] matrix
 %     with randomly generated noise
 %
 % Static methods
-%     These allow you to generate the noise sources directly.
+%     These allow you to generate the noise sources directly
 %   > AR1 = generateAR1Noise(numTRs, numVoxels, ~, rho) returns AR1
 %     noise with SD of 1. Optionally you can supply the parameter RHO
 %   > Gauss = generateGaussianNoise(numTRs, numVoxels) returns Gaussian
@@ -34,7 +35,7 @@ classdef fm_noise < handle
 %   > Phys = generatePhysiologicalNoise(numTRs, numVoxels, TR) returns
 %     physiological noise with SD of 1
 %
-%   Citations
+%   References
 %   + AR1 process is based on: Mumford, J. A., Turner, B. O., Ashby, F. G., &
 %     Poldrack, R. A. (2012). Deconvolving BOLD activation in event-related
 %     designs for multivoxel pattern classification analyses. NeuroImage,

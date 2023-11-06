@@ -1,64 +1,62 @@
 classdef fm_sequence < matlab.mixin.Copyable
-%FM_SEQUENCE Generate a random sequence of trials for your experiment
-% Using information from an 'fm_task' object and other properties, generate
-% a randomized sequence of trials from different conditions with a desired
-% inter-trial interval model.
+%FM_SEQUENCE Generate a random sequence of trials
+% Provided an 'fm_task' object and other properties, generate a randomized
+% sequence of trials of different conditions with a desired inter-trial
+% interval model
 %
-% Input properties:
-%   <task> A filled 'fm_task' object.
+% Input properties
+%   <task> A filled 'fm_task' object
 %   <numRuns> to generate
-%   <runDuration> in seconds. All runs will be the same duration.
+%   <runDuration> in seconds. All runs will be the same duration
 %   <itiModel> is either 'fixed', 'uniform' or 'exponential' (a truncated
-%   exponential distribution)
-%   <itiParams> should be a single value, indicating the duration of the
-%   ITI, if itiModel is fixed. Otherwise, it should be a 1x2 vector
-%   indicating the minimum and maximum ITI lengths.
-%   <TR> The temporal resolution of the sequence. Usually this is the same
-%   as the TR of the simulation you will do with fm_simulation.
+%     exponential distribution)
+%   <itiParams> If itiModel is 'fixed', this is a single value indicating
+%     the duration. Otherwise, it is a 2-element vector indicating the
+%     minimum and maximum ITI lengths.
+%   <TR> The temporal resolution of the sequence.
 %
-%   <matchProbabilitiesExactly> is true by default. It will ensure that,
-%   over the entire experiment, each condition will exactly with the
-%   proportions set in the 'content' property of the 'fm_task' object. If
-%   false, fm_sequence will randomly fill the remaining time with more
-%   trials to minimize waste.
+%   <matchProbabilitiesExactly> If true, this ensures that over the entire
+%     sequence, each condition will appear exactly in the proportions set
+%     in the 'content' property of the 'fm_task' object. If false,
+%     fm_sequence will randomly fill the remaining time with more trials to
+%     minimize waste. True by default.
 %   <lambda> The "steepness" of exponentially distributed ITIs. Smaller
-%   values mean more shorter-duration ITIs. Set by default to 3.0.
-%   <giveWarnings> is true by default. It informs you when more than 15% of
-%   run durations is unused.
+%     values mean more shorter-duration ITIs. Default is 3.0.
+%   <giveWarnings> Warn when more than 15% of run durations is unused. True
+%     by default.
 %
 % Output properties
-%   <eventList> A vector of fm_eventList objects (see fm_eventList). This
-%   should generally be supplied to fm_designMatrix. Each 'fm_eventList'
-%   object contains ID and timing of every event from a run. The "ID"
-%   values here are from the 'EventIDs' column of the 'contentNumerical'
-%   property of the supplied 'fm_task' object.
+%   <eventList> A vector of fm_eventList objects (see fm_eventList). The
+%     ID values are from 'EventIDs' from 'contentNumerical' column of the
+%     'fm_task' object
 %   <eventListWIti> Same as 'eventList', but also contains the ITIs (with
-%   their ID set to 0) in case you need it.
+%     their ID set to 0)
 %   <condIDsPerRun> Same sequence as above, but represented using the
-%   condition IDs from the supplied fm_task table rather than the events
-%   across all conditions. The values correspond to the row of the fm_task
-%   table.
+%     condition IDs from the fm_task object rather than the events across
+%     all conditions. The values correspond to the row of the fm_task
+%     table.
 %   <occupiedPercentage> The percentage of the total run that contains
-%   trials.
+%     trials
+%
+% Constructors
+%   > obj = fm_sequence();
+%   > obj = fm_sequence(task), where 'task' is an fm_task object.
 %
 % Methods
-%   > seq = fm_sequence(task) takes a filled 'fm_task' object and returns an
-%   fm_sequence object.
-%   > go() Once all the properties are set, launch this method to generate
-%   the sequence.
+%   > obj.go() Generate sequence
 %
-% Examples
+% Beware
+%   If you do a histogram of the ITIs, set a small bin width. Automatic
+%   MATLAB behavior will seem to show a disproportional amount of the max
+%   ITI.
+%
+% Example
 %   seq = fm_sequence(task);
 %   seq.itiModel = 'exponential';
 %   seq.itiParams = [2 7];
 %   seq.runDuration = 388;
 %   seq.go();
 %   seq.eventList(1) % the first run of the generated sequence
-%   
-% Beware:
-%   If you do a histogram of the ITIs make sure to set a tiny bin width. If
-%   you let MATLAB set it automatically it'll appear that there is a
-%   disproportional amount of the max ITI.
 %
 % Part of package funkyMage. November 2023.
 % https://github.com/aj-abdujabborov/funkyMage

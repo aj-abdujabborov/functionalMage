@@ -1,50 +1,52 @@
 classdef fm_designMatrix < matlab.mixin.Copyable
 %FM_DESIGNMATRIX Do all design-matrix related maneuvers
-% Combine an 'fm_task' object and an associated 'fm_eventList' object
-% (acquired from 'fm_sequence') and produce design matrices for simulation,
-% General Linear Modeling, and classification analysis.
+% Using 'fm_task' and 'fm_eventList' objects, produce design matrices for
+% simulation, General Linear Modeling, and classification analyses.
 %
 % Input properties
 %   <task> A filled fm_task object
-%   <unqEventList> A vector of 'fm_eventList' objects acquired from
-%   'fm_sequence'
-%   <runwiseAnalysisIDs> The AnalysisIDs of events (from 'fm_task') that
-%   you'd like to analyze run-wise no matter what (even with a Least
-%   Squares All or trial-wise analysis). Empty by default.
-%   <doNotClassifyGroupIDs> ClassificationGroup values of events (from
-%   'fm_task') that you do not want to classify. 0 by default. In other
-%   words, set a 0 to all events you do not want classified in
-%   'ClassificationGroups'.
+%   <unqIDEventList> A vector of 'fm_eventList' objects acquired from
+%     'fm_sequence'
+%   <runwiseAnalysisIDs> The AnalysisIDs of events (in 'fm_task') that
+%     should be analyze run-wise (even with a Least Squares All or
+%     trial-wise analysis). Empty by default.
+%   <doNotClassifyGroupIDs> ClassificationGroup values of events (in
+%     'fm_task') that should not be classified. [0] by default. Thus, set a
+%     0 in 'ClassificationGroups' for all events you do not want
+%     classified.
 % 
+% Constructors
+%   > obj = fm_designMatrix()
+%   > obj = fm_designMatrix(task)
+%   > obj = fm_designMatrix(task, unqIDEventList)
+%
 % Methods
-%   > dm = fm_designMatrix(task, unqEventList) returns an fm_designMatrix
-%   object.
-%   > getNeuralPatternIDEventList() returns a vector of fm_eventList
-%   objects that are supplied to fm_simulation.
-%   > getGlmLSA() returns a vector of fm_eventList objects to be used by
-%   fm_glm for a Least Squares All analysis.
-%   > getMvpaLSA() returns a structure with fields 'label' and 'group'
-%   indicating the classification label and ClassificationGroup of each
-%   beta estimate produced by fm_glm. It's to be used with fm_mvpa. In
-%   other words, once you use getGlmLSA() on fm_glm, you'd use getMvpaLSA()
-%   on fm_mvpa.
-%   > getGlmLSS1() for a Least Squares Separate analysis, which takes a
-%   "pull one out" approach. For each event, a separate OLS General Linear
-%   Model is run where that event gets its own regressor and the other
-%   events are all combined into another regressor. 
-%   > getGlmLSS2() Also a Least Squares Separate, but the "other" events
-%   are combined according to their AnalysisID rather than into one
-%   regressor.
-%   > getMvpaLSS() for Least Squares Separate classifications.
-%   > getGlmLSU() for a Least Squares Unitary analysis, where rather than
-%   get an estimate for each event, an estimate is produced for each event
-%   type (here indicated by AnalysisID).
-%   > getMvpaLSU() for a Least Squares Unitary classification analysis.
+%   > obj.getNeuralPatternIDEventList() returns a vector of fm_eventList
+%     objects to input to fm_simulation
+%   > obj.getGlmLSA() returns a design matrix inside a vector of
+%     fm_eventList objects to be used by fm_glm for a Least Squares All
+%     analysis.
+%   > obj.getMvpaLSA() returns a structure with fields 'Label' and 'Group'
+%     indicating the classification label and group of each beta estimate
+%     produced by fm_glm when obj.getGlmLSA() is used for the design
+%     matrix. Thus, once you use getGlmLSA() on fm_glm, you'd use
+%     getMvpaLSA() on fm_mvpa.
+%   > obj.getGlmLSS1() returns a design matrix for a Least Squares Separate
+%     analysis, which takes a "pull one out" approach: for each event, a
+%     separate OLS General Linear Model is run where that event gets its
+%     own regressor and the other events are all combined into another
+%     regressor.
+%   > obj.getGlmLSS2() Similar to the last method, but the "other" events
+%     are combined according to their AnalysisID rather than into one
+%     regressor.
+%   > obj.getMvpaLSS() for Least Squares Separate classifications.
+%   > obj.getGlmLSU() for a Least Squares Unitary analysis, where events of
+%     the same AnalysisID are combined into one regressor.
+%   > obj.getMvpaLSU() for a Least Squares Unitary classification analysis.
 %
 % Examples
 %   dm = fm_designMatrix(task, seq.eventList) % seq is an 'fm_sequence' object
-%   dm.runwiseAnalysisIDs = [1 2]; 
-%        % collapse multiple events into two regressors
+%   dm.runwiseAnalysisIDs = [1 2]; % collapse multiple events into two regressors
 %   dm.getGlmLSA() % for LSA GLM
 %   dm.getMvpaLSA() % for MVPA analysis using fm_glm output
 %
@@ -89,9 +91,6 @@ classdef fm_designMatrix < matlab.mixin.Copyable
     methods
         %%%
         function obj = fm_designMatrix(task, eventList)
-            if nargin == 0
-                return;
-            end
             if nargin >= 1
                 obj.task = task;
             end
