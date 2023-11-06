@@ -145,7 +145,7 @@ classdef fm_glm < matlab.mixin.Copyable
         results; 
     end
 
-    properties (Access = private)
+    properties (Access = protected)
         numRuns;
         numRegressors;
 

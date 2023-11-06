@@ -55,7 +55,7 @@ classdef fm_data < matlab.mixin.Copyable
         dataName {mustBeText} = "";
     end
 
-    properties (Dependent = true, SetAccess = private)
+    properties (Dependent = true, SetAccess = protected)
         numTRs;
         numRows;
         numCols;
@@ -63,7 +63,7 @@ classdef fm_data < matlab.mixin.Copyable
         duration;
     end
 
-    properties (Access = private)
+    properties (Access = protected)
         privateID;
     end
 
@@ -162,7 +162,7 @@ classdef fm_data < matlab.mixin.Copyable
         end
     end
 
-    methods (Access = private)
+    methods (Access = protected)
         function dataCombined = combineCompatibleParameters(objVector)
             if isempty(objVector)
                 error("fm_data vector is empty");
@@ -200,7 +200,7 @@ classdef fm_data < matlab.mixin.Copyable
         end
     end
 
-    methods (Static = true, Access = private)
+    methods (Static = true, Access = protected)
         function bool = areAllSame(valueVec, numValues)
             bool = false;
             if isempty(valueVec) || (length(unique(valueVec)) == 1 && length(valueVec) == numValues)

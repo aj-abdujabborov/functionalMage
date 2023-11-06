@@ -86,14 +86,14 @@ classdef fm_sequence < matlab.mixin.Copyable
         giveWarnings (1,1) logical = true;
     end
 
-    properties (SetAccess = private)
+    properties (SetAccess = protected)
         eventList (1,:) fm_eventList;
         eventListWIti (1,:) fm_eventList;
         condIDsPerRun;
         occupiedPercentage;
     end
 
-    properties (Access = private)
+    properties (Access = protected)
         privateTask;
 
         probabilities (1,:) {mustBeNonnegative};
@@ -416,7 +416,7 @@ classdef fm_sequence < matlab.mixin.Copyable
         end
     end
 
-    methods (Access = private, Static = true)
+    methods (Access = protected, Static = true)
         function out = get1ToNInTheseAmounts(amounts)
             out = nan(sum(amounts), 1);
 

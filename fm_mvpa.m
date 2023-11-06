@@ -75,7 +75,7 @@ classdef fm_mvpa < matlab.mixin.Copyable
         doNotClassifyGroupIDs = [0];
     end
 
-    properties (Access = private)
+    properties (Access = protected)
         numRuns;
         numGroups;
         groupIDs;
@@ -85,7 +85,7 @@ classdef fm_mvpa < matlab.mixin.Copyable
         labelSelector;
     end
 
-    properties (Access = private, Constant = true)
+    properties (Access = protected, Constant = true)
         classifCfg = struct('classifier', 'lda', ...
                             'metric', 'accuracy', ...
                             'feedback', 0, ...
@@ -199,7 +199,7 @@ classdef fm_mvpa < matlab.mixin.Copyable
         end
     end
 
-    methods (Access = private)
+    methods (Access = protected)
         function checkProperties(obj)
             obj.numRuns = length(obj.betas);
             for r = 1:obj.numRuns
@@ -263,7 +263,7 @@ classdef fm_mvpa < matlab.mixin.Copyable
     end
 
 
-    methods (Access = private, Static = true)
+    methods (Access = protected, Static = true)
         function columnVec = mapValuesInto1ToN(columnVec, valsToMap)
             nanIdx = isnan(columnVec);
             cleaned = columnVec(~nanIdx, :);

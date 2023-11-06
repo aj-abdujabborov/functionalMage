@@ -106,12 +106,12 @@ classdef fm_simulation < matlab.mixin.Copyable
         boldTimeSeries (1,:) fm_data;
     end
 
-    properties (Access = private)
+    properties (Access = protected)
         numRuns;
         runDuration;
     end
 
-    properties (Access = private, Dependent = true)
+    properties (Access = protected, Dependent = true)
         numTRs;
     end
  

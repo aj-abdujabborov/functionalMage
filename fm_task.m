@@ -107,11 +107,11 @@ classdef fm_task < matlab.mixin.Copyable
         contentNumerical;
     end
 
-    properties (Access = private)
+    properties (Access = protected)
         privateContent = fm_task.getEmptyTaskTable();
     end
 
-    properties (Access = private, Constant = true)
+    properties (Access = protected, Constant = true)
         colNames = ["Probability", "Durations", "Onsets",...
                     "NeuralIntensity", "NeuralPatternIDs",...
                     "AnalysisIDs", "ClassificationGroups"]';

@@ -61,7 +61,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         doNotClassifyGroupIDs = [0];
     end
 
-    properties (Access = private)
+    properties (Access = protected)
         privateTaskTable;
 
         % 1D identifier vectors
@@ -254,7 +254,7 @@ classdef fm_designMatrix < matlab.mixin.Copyable
         end
     end
 
-    methods (Access = private, Static = true)
+    methods (Access = protected, Static = true)
         function transformed = transformToRunwiseAndEventwise(IDs, IDsToMakeRunwise)
             transformed = nan(size(IDs));
 
@@ -294,17 +294,6 @@ classdef fm_designMatrix < matlab.mixin.Copyable
                 assert(numel(correspondingB) <= 1, "All elements of the same value in vecA must map onto elments of the same value in vecB");
                 replaced(data == currUnqA) = correspondingB;
             end
-        end
-
-        %%% destined to trash:
-        function bEmpty = isFieldClear(structIn, fieldname)
-            bEmpty = isempty(structIn) || ~isfield(structIn, fieldname) || isempty(structIn(1).(fieldname));
-        end
-        
-        function replaced = replaceValues2(data, old, new)
-            [found, idx] = ismember(data, old);
-            replaced = data;
-            replaced(found) = new(idx(found));
         end
     end
 

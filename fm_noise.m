@@ -195,7 +195,7 @@ classdef fm_noise < handle
     end
 
 
-    methods (Static = true, Access = private)
+    methods (Static = true, Access = protected)
         function noiseAmount = validateNoiseAmount(noiseName, noiseAmount)
             assert(numel(noiseAmount) == 1 & noiseAmount >= 0,...
                 noiseName + " should be a single non-negative value.");

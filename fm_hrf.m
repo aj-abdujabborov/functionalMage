@@ -226,7 +226,7 @@ classdef fm_hrf
         end
     end
 
-    methods (Static = true, Access = private)
+    methods (Static = true, Access = protected)
         function [Q, R] = orthonormalize(X)
             % Modified Gram-Schmidt.
             % G. W. Stewart, "Matrix Algorithms, Volume 1", SIAM, 1998.

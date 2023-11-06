@@ -56,7 +56,7 @@ classdef fm_eventList
         runDuration (1,1) {mustBeNonnegative};
     end
 
-    properties (Access = private)
+    properties (Access = protected)
         privateContent;
         privateRunDuration;
     end
