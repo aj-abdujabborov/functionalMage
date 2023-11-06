@@ -6,5 +6,13 @@ classdef funkyMage < matlab.mixin.Copyable
                 mkdir(output);
             end
         end
+        
+        function addToPath()
+            location = fileparts(which('funkyMage.m'));
+            if isempty(location)
+                error('Cannot find funkyMage.m');
+            end
+            addpath(genpath(location));
+        end
     end
 end
