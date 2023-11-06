@@ -1,3 +1,7 @@
+% Let's add funkyMage to our path. Make sure you're in the funkyMage
+% folder.
+funkyMage.addToPath();
+
 %% Intro to MATLAB classes
 % Classes are a way to bundle related *data* and computational *processes*
 % into a single object by providing a template for how that object should
@@ -32,7 +36,7 @@ sim.numSignificantResults = 99; % gives error
 % the built-in defaults.
 
 % So I can call the "go" method to simulate data after I supply all the
-% necessary properties.
+% necessary or optional properties.
 sim.TR = 0.5;
 sim.noiseSD = 3;
 sim.go(); % for now, gives error
@@ -48,7 +52,8 @@ sim.boldTimeSeries()
 % (Note that this distinction is for convenience. There are no inherent
 % input vs output properties in classes.)
 
-% You can get more detail by using the help function, but that's for later.
+% You can get more detail by using the help function, but save that for
+% later.
 help fm_simulation
 
 %% Hypothetical study
@@ -58,8 +63,8 @@ help fm_simulation
 % Analysis: classify neural activity from the stimulus period
 
 %% Task
-% We will input the above information into a table. We can do this using
-% the fm_task class. Let's get an fm_task object:
+% First we must input the above information into a table using the fm_task
+% class. Let's get an fm_task object:
 task = fm_task();
 
 % Now we should fill in the task details and some core simulation and
@@ -67,49 +72,64 @@ task = fm_task();
 task.content % empty
 summary(task.content) % get names of all the fields expected of us
 
-% Let's fill the details. We will have a cell array for each condition,
-% each each cell array will consist of 1 numeric value followed by 6
-% strings (characters surrounded by double quotes).
+% Let's fill the details. We will have a cell array for each condition, and
+% each element of a cell array will be a required field. Each cell array
+% will consist of 1 numeric value followed by 6 strings (characters
+% surrounded by double quotes).
+
+% Let's input our hypothetical study design here
 task.content = [
     {1, "2 1", "", "", "1 2", "1 2", "1 0"};...
     {1, "2 1", "", "", "3 4", "3 4", "1 0"}
     ];
 
 % Above we are saying: For the first condition:
-% * Make its proportion of occurrences be 1, relative to other conditions
-% * Make its durations 2s and 1 s
-% * Calculate its onset times times automatically (since we left the third
-%   string blank)
-% * Set neural activation level to default of 100% (since we left fourth
-%   string blank)
-% * Give the two events different neural activation patterns (if we'd set
-%   "1 1" they'd have the same pattern)
-% * Treat the two events as analytically distinct (roughly meaning
-%   different regressors)
-% * Classify the first event (non-zero number), but do not classify the
-%   second one
+% * Probability: Make its proportion of occurrences be 1, relative to other
+%   conditions
+% * Durations: Make its durations 2s and 1s
+% * Onsets: Calculate its onset times times automatically (since we left
+%   the third string blank)
+% * NeuralIntensity: Set neural activation levels during the upcoming
+%   simulation phase to the default of 100% (since we left fourth string
+%   blank)
+% * NeuralPatternIDs: Give the two events different neural activation
+%   patterns during simulation (if we'd set "1 1" instead of "1 2" they'd
+%   have the same pattern)
+% * AnalysisIDs: Treat the two events as different types of events during
+%   the analysis
+% * ClassificationGroups: Classify the first event (non-zero number), but
+%   do not classify the second one
+% If this is not clear, try "help fm_task"
 
 % For the second condition, things are the same except we're providing
 % different NeuralPatternIDs, since the stimulus and (therefore) response
 % are different from the first condition; and different AnalysisIDs, since
-% the neural activities are different.
+% the neural activities are different
 
 % Now let's see what we've made
 disp(task.content)
 
-% You can see the information we filled + the pre-built class functionality
-% filled in the empty strings.
+% You can see the information we filled + the class intelligently filled in
+% the empty strings
 
 %% Sequence
 % Now, since we have our design, we need to generate a random sequence of
 % trials. For this we make an fm_sequence object
 seq = fm_sequence(task);
 
-% Note that the class needs a non-empty fm_task object if we want to use
-% its methods, and it allows us to supply it the moment we create the
-% fm_sequence object. You can see the different ways you can make a class
-% object by doing "help fm_className" and looking at the "Constructors"
-% section. Let's change some properties from their default.
+% See what properties it has
+disp(seq)
+
+% Note that the class needs a filled 'fm_task' object (which we already
+% made) if we want to use its methods, and it allows us to supply it the
+% the moment we create the fm_sequence object. You can see this because as
+% we create the fm_sequence object, we're supplying it with an input.
+
+% You can see the different ways you can make a class object by doing "help
+% fm_className" and looking at the "Constructors" section. Try this now
+% with "help fm_sequence"
+
+% Let's change some properties from their default
 seq.numRuns = 5;
 seq.runDuration = 336;
 seq.itiModel = 'fixed';
@@ -209,3 +229,7 @@ fprintf("Classification accuracy is %shigher than chance", msg);
 
 % Because in the fm_task section, we only had one unique value under
 % "ClassificationGroup", that value being 1, we only get 1 value
+
+%% Conclusion
+% That's it! This is a lengthy introduction but the process was hopefully
+% simple. Head onto introPart2.m for a deeper dive.

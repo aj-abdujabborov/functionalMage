@@ -1,4 +1,4 @@
-classdef fm_noise < handle
+classdef fm_noise < matlab.mixin.Copyable
 %FM_NOISE Generate fMRI noise
 % Generate a combination of AR1, Gaussian, Rician and Physiological noise
 %

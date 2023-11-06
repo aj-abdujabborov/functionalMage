@@ -1,4 +1,4 @@
-classdef fm_hrf
+classdef fm_hrf < matlab.mixin.Copyable
 %FM_HRF Get and cache HRFs 
 %
 % Static methods
